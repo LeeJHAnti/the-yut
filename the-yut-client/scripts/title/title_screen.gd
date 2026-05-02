@@ -10,6 +10,7 @@ extends Control
 @onready var status_label: Label = $VBox/StatusLabel
 @onready var room_list_panel: VBoxContainer = $VBox/RoomListPanel
 @onready var http_request: HTTPRequest = $HTTPRequest
+@onready var info_button: Button = $InfoButton
 
 # Decoration sprites
 const TEX_DECO_FLOWER = preload("res://assets/sprites/deco_flower.png")
@@ -47,6 +48,26 @@ func _ready() -> void:
 	join_room_btn.pressed.connect(_on_join_room)
 	name_input.text_changed.connect(_on_name_changed)
 	http_request.request_completed.connect(_on_room_list_received)
+	info_button.pressed.connect(_on_info_pressed)
+
+	# Style info button as a pixel circle with "i"
+	var info_style = StyleBoxFlat.new()
+	info_style.bg_color = Color("E8D8B0")
+	info_style.border_color = Color("503820")
+	info_style.set_border_width_all(2)
+	info_style.set_corner_radius_all(25)
+	info_style.content_margin_left = 0
+	info_style.content_margin_right = 0
+	info_style.content_margin_top = 0
+	info_style.content_margin_bottom = 2
+	info_button.add_theme_stylebox_override("normal", info_style)
+	var info_hover = info_style.duplicate()
+	info_hover.bg_color = Color("F8F0D8")
+	info_button.add_theme_stylebox_override("hover", info_hover)
+	var info_pressed = info_style.duplicate()
+	info_pressed.bg_color = Color("D4B888")
+	info_button.add_theme_stylebox_override("pressed", info_pressed)
+	info_button.add_theme_color_override("font_color", Color("503820"))
 
 	NetworkManager.connected.connect(_on_connected)
 	NetworkManager.disconnected.connect(_on_disconnected)
@@ -191,6 +212,11 @@ func _join_room_by_code(code: String) -> void:
 		await NetworkManager.connected
 	_send_name()
 	NetworkManager.send_message({"type": "join_room", "payload": {"code": code}})
+
+func _on_info_pressed() -> void:
+	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
+	var rules = rules_scene.instantiate()
+	add_child(rules)
 
 func _send_name() -> void:
 	NetworkManager.send_message({

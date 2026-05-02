@@ -140,6 +140,8 @@ impl GameState {
             self.phase = GamePhase::SelectingPiece;
             // Auto-skip BackDo if player has no pieces on the board
             self.auto_skip_unusable_backdo();
+            // Auto-finish completed_circuit pieces if they're the only option
+            self.auto_finish_completed_circuit();
         }
 
         Ok(result)
@@ -596,6 +598,68 @@ impl GameState {
         true
     }
 
+    /// Auto-finish pieces that have completed_circuit when ALL of the player's
+    /// remaining (non-Finished) pieces are completed_circuit on the board.
+    /// This handles the case where the last piece(s) are waiting at node 0
+    /// and any throw should finish them without requiring user interaction.
+    /// Returns the list of auto-finished piece IDs.
+    pub fn auto_finish_completed_circuit(&mut self) -> Vec<usize> {
+        if self.phase != GamePhase::SelectingPiece {
+            return vec![];
+        }
+
+        let player_id = self.turn.current_player;
+
+        // Get all non-finished piece IDs for this player
+        let non_finished: Vec<usize> = self.pieces.iter()
+            .filter(|p| p.owner == player_id && !p.is_finished())
+            .map(|p| p.id)
+            .collect();
+
+        if non_finished.is_empty() {
+            return vec![];
+        }
+
+        // ALL non-finished pieces must be completed_circuit and on board
+        let all_completed = non_finished.iter().all(|&pid| {
+            self.pieces[pid].completed_circuit && self.pieces[pid].is_on_board()
+        });
+
+        if !all_completed {
+            return vec![];
+        }
+
+        // Need at least one non-BackDo result to finish a piece
+        let non_backdo_count = self.turn.pending_results.iter()
+            .filter(|r| !r.is_backward())
+            .count();
+
+        if non_backdo_count == 0 {
+            return vec![];
+        }
+
+        // Auto-finish each completed_circuit piece (one result per piece)
+        let mut finished_pieces = vec![];
+        for &pid in &non_finished {
+            if let Some(idx) = self.turn.pending_results.iter().position(|r| !r.is_backward()) {
+                self.turn.pending_results.remove(idx);
+                let _ = self.finish_piece(pid);
+                finished_pieces.push(pid);
+            }
+        }
+
+        // Check win
+        if self.check_win(player_id) {
+            self.winner = Some(player_id);
+            self.phase = GamePhase::GameOver;
+        } else {
+            // Still have results or need to advance
+            self.advance_phase(player_id);
+        }
+
+        finished_pieces
+    }
+
     /// Check if two players are on the same team (always true for same player).
     pub fn are_teammates(&self, a: usize, b: usize) -> bool {
         if a == b {
@@ -1033,6 +1097,76 @@ mod tests {
         let skipped = state.auto_skip_unusable_backdo();
         assert!(skipped, "BackDo should be auto-skipped when no pieces on board");
         assert_eq!(state.turn.current_player, 1, "Turn should advance to Bob");
+    }
+
+    // ─────────────────────────────────────────────
+    // 자동 골인 (auto-finish completed_circuit)
+    // ─────────────────────────────────────────────
+
+    /// 마지막 말이 completed_circuit 상태일 때 non-BackDo 결과로 자동 골인
+    #[test]
+    fn test_auto_finish_last_completed_circuit_piece() {
+        let mut state = setup_two_player_game();
+        // Alice의 말 3개를 완주 처리
+        for i in 0..3 {
+            state.pieces[i].finish();
+        }
+        // 마지막 말(piece 3)을 node 0에 completed_circuit 상태로 배치
+        state.pieces[3].place_on_board(Position::new(0, Path::Outer));
+        state.pieces[3].completed_circuit = true;
+
+        // Alice 턴에 Do 결과 부여
+        state.turn.current_player = 0;
+        state.turn.pending_results.push(YutResult::Do);
+        state.turn.must_throw = false;
+        state.phase = GamePhase::SelectingPiece;
+
+        let finished = state.auto_finish_completed_circuit();
+        assert!(finished.contains(&3), "Piece 3 should be auto-finished");
+        assert!(state.pieces[3].is_finished(), "Piece 3 should be Finished");
+        assert_eq!(state.phase, GamePhase::GameOver, "Game should be over");
+        assert_eq!(state.winner, Some(0), "Alice should be the winner");
+    }
+
+    /// BackDo만 남아 있으면 auto-finish가 동작하지 않는다.
+    #[test]
+    fn test_auto_finish_skips_with_only_backdo() {
+        let mut state = setup_two_player_game();
+        for i in 0..3 {
+            state.pieces[i].finish();
+        }
+        state.pieces[3].place_on_board(Position::new(0, Path::Outer));
+        state.pieces[3].completed_circuit = true;
+
+        state.turn.current_player = 0;
+        state.turn.pending_results.push(YutResult::BackDo);
+        state.turn.must_throw = false;
+        state.phase = GamePhase::SelectingPiece;
+
+        let finished = state.auto_finish_completed_circuit();
+        assert!(finished.is_empty(), "No pieces should be auto-finished with only BackDo");
+        assert!(!state.pieces[3].is_finished());
+    }
+
+    /// completed_circuit가 아닌 말이 있으면 auto-finish가 동작하지 않는다.
+    #[test]
+    fn test_auto_finish_skips_when_non_completed_piece_exists() {
+        let mut state = setup_two_player_game();
+        state.pieces[0].finish();
+        state.pieces[1].finish();
+        // piece 2는 보드 위에 있지만 completed_circuit 아님
+        state.pieces[2].place_on_board(Position::new(5, Path::Outer));
+        // piece 3는 completed_circuit
+        state.pieces[3].place_on_board(Position::new(0, Path::Outer));
+        state.pieces[3].completed_circuit = true;
+
+        state.turn.current_player = 0;
+        state.turn.pending_results.push(YutResult::Do);
+        state.turn.must_throw = false;
+        state.phase = GamePhase::SelectingPiece;
+
+        let finished = state.auto_finish_completed_circuit();
+        assert!(finished.is_empty(), "Should not auto-finish when non-completed pieces exist");
     }
 
     /// 말이 보드 위에 있을 때는 BackDo가 auto-skip되지 않는다.

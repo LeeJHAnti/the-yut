@@ -21,7 +21,8 @@ const ParticleEffects = preload("res://scripts/game/particle_effects.gd")
 
 # UI elements
 @onready var turn_marquee: Label = $TurnMarquee
-@onready var action_prompt: Label = $ActionPrompt
+@onready var action_popup: PanelContainer = $ActionPopup
+@onready var action_label: Label = $ActionPopup/ActionLabel
 @onready var path_choice_panel: Control = $PathChoicePanel
 
 var piece_nodes: Dictionary = {}
@@ -67,6 +68,20 @@ func _ready() -> void:
 
 	_hide_all_actions()
 	path_choice_panel.visible = false
+
+	# ─── Style action popup (Nintendo RPG notification banner) ───
+	var popup_style = StyleBoxFlat.new()
+	popup_style.bg_color = Color("F8F0D8", 0.95)
+	popup_style.border_color = Color("503820")
+	popup_style.set_border_width_all(2)
+	popup_style.set_corner_radius_all(5)
+	popup_style.content_margin_left = 12
+	popup_style.content_margin_right = 12
+	popup_style.content_margin_top = 6
+	popup_style.content_margin_bottom = 6
+	popup_style.shadow_color = Color(0, 0, 0, 0.15)
+	popup_style.shadow_size = 3
+	action_popup.add_theme_stylebox_override("panel", popup_style)
 
 	# ─── Create finish confirmation panel (Nintendo RPG dialog style) ───
 	var finish_panel_container = PanelContainer.new()
@@ -227,7 +242,7 @@ func _update_current_turn_index() -> void:
 func _hide_all_actions() -> void:
 	yut_input.enabled = false
 	yut_input.visible = false
-	action_prompt.visible = false
+	action_popup.visible = false
 	path_choice_panel.visible = false
 	if finish_confirm_panel:
 		finish_confirm_panel.visible = false
@@ -244,8 +259,11 @@ func _hide_all_actions() -> void:
 	_deselect_all_pieces()
 
 func _set_action(text: String) -> void:
-	action_prompt.text = text
-	action_prompt.visible = true
+	action_label.text = text
+	if text == "":
+		action_popup.visible = false
+	else:
+		action_popup.visible = true
 
 func _show_throw_prompt() -> void:
 	_hide_all_actions()
@@ -354,7 +372,7 @@ func _show_path_choice(paths: Array) -> void:
 
 func _on_yut_flicked(power: float) -> void:
 	yut_input.enabled = false
-	action_prompt.visible = false
+	action_popup.visible = false
 	NetworkManager.send_message({
 		"type": "throw_yut",
 		"payload": {"gesture_power": power}
@@ -456,7 +474,7 @@ func _end_drag() -> void:
 		piece_node.end_drag(current_snap["position"])
 		board.clear_highlights()
 		_set_action("")
-		action_prompt.visible = false
+		action_popup.visible = false
 		awaiting_piece_select = false
 		_deselect_all_pieces()
 		chosen_snap_node = current_snap.get("node_id", -1)
@@ -551,7 +569,7 @@ func _select_piece(piece_id: int) -> void:
 	_deselect_all_pieces()
 	board.clear_highlights()
 	_set_action("")
-	action_prompt.visible = false
+	action_popup.visible = false
 	NetworkManager.send_message({
 		"type": "select_piece",
 		"payload": {
@@ -584,7 +602,7 @@ func _on_finish_confirm_no() -> void:
 
 func _on_path_chosen(choice: String) -> void:
 	path_choice_panel.visible = false
-	action_prompt.visible = false
+	action_popup.visible = false
 	NetworkManager.send_message({
 		"type": "select_path",
 		"payload": {"path_choice": choice}

@@ -435,12 +435,32 @@ async fn handle_throw_yut(client: &mut WsClient, rooms: &RoomMap) {
                     room.broadcast(&msg);
 
                     if !grants_extra {
+                        // Check if completed_circuit pieces were auto-finished
+                        // (auto_finish_completed_circuit runs inside throw_yut)
+                        if room.state.phase == GamePhase::GameOver {
+                            // Auto-finish triggered game over
+                            let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                            room.broadcast(&sync);
+
+                            if let Some(winner_id) = room.state.winner {
+                                let winner_name = room.state.get_winner_display_name(winner_id);
+                                log::info!("Game ended (auto-finish): winner='{}' (ID: {})", winner_name, winner_id);
+                                let go_msg = ServerMessage::game_over(
+                                    winner_id.to_string(),
+                                    winner_name,
+                                );
+                                room.broadcast(&go_msg);
+                            }
+                            return;
+                        }
+
                         // This throw didn't grant an extra turn, so the throwing
                         // sub-phase for this result is done.  Send state sync.
                         let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
                         room.broadcast(&sync);
 
-                        // Check if BackDo was auto-skipped (turn may have advanced)
+                        // Check if BackDo was auto-skipped or auto-finish
+                        // advanced the turn
                         let current_turn = room.state.turn.current_player;
                         if current_turn != player_id {
                             let turn_msg = ServerMessage::your_turn(
@@ -698,6 +718,19 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                         // Extra turn — throw again after delay
                         (true, 1500)
                     } else {
+                        // Check if auto-finish triggered game over
+                        if room.state.phase == GamePhase::GameOver {
+                            let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                            room.broadcast(&sync);
+                            if let Some(winner_id) = room.state.winner {
+                                let winner_name = room.state.get_winner_display_name(winner_id);
+                                log::info!("Game ended (bot auto-finish): winner='{}' (ID: {})", winner_name, winner_id);
+                                let go_msg = ServerMessage::game_over(winner_id.to_string(), winner_name);
+                                room.broadcast(&go_msg);
+                            }
+                            return (false, 0);
+                        }
+
                         // Done throwing — send sync.  auto_skip_unusable_backdo()
                         // may have advanced the turn inside throw_yut(), so
                         // should_throw() could be true for the NEXT player.
