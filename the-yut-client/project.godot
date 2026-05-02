@@ -1,0 +1,41 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="The Yut"
+config/version="0.1.0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.6")
+
+[autoload]
+
+NetworkManager="*res://scripts/autoload/network_manager.gd"
+GameState="*res://scripts/autoload/game_state.gd"
+AudioManager="*res://scripts/autoload/audio_manager.gd"
+DotMatrixOverlay="*res://scripts/autoload/dot_matrix_overlay.gd"
+
+[display]
+
+window/size/viewport_width=520
+window/size/viewport_height=960
+window/size/window_width_override=520
+window/size/window_height_override=960
+window/stretch/mode="canvas_items"
+window/handheld/orientation=1
+
+[gui]
+
+theme/default_font="res://assets/fonts/pixel_font.tres"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+renderer/rendering_method="gl_compatibility"

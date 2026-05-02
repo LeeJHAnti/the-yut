@@ -1,0 +1,33 @@
+# fly.toml app configuration file generated for the-yut-empty-log-8021 on 2026-04-19T10:33:40+09:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'the-yut-empty-log-8021'
+primary_region = 'nrt'
+
+[build]
+
+[http_service]
+  internal_port = 9001
+  force_https = true
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  # Required headers for Godot WASM (SharedArrayBuffer)
+  [http_service.headers]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/admin/stats"
+
+[[vm]]
+  memory = '512mb'
+  cpus = 1

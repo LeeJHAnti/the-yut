@@ -1,0 +1,19 @@
+# Rust
+the-yut-server/target/
+
+# Godot
+the-yut-client/.godot/
+*.import
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
