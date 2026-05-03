@@ -4,11 +4,11 @@ extends Node2D
 # Traditional Yut Board (윷판) — 520×960 PORTRAIT viewport
 # ══════════════════════════════════════════════════════════════════
 #
-# Layout (top to bottom):
+# Layout (top to bottom) — compact for ad banner:
 #   Turn marquee:   y=0~34   (h=34, 한줄 전광판)
 #   Board area:     y=36~566 (h=530, 428×428 node area centered)
-#   Player trays:   y=570~720 (h=150, dynamic split by player count)
-#   Yut throw area: y=720~922 (h=202)
+#   Player trays:   y=568~698 (h=130, dynamic split by player count)
+#   Yut throw area: y=700~870 (h=170)
 #
 # Board: 428px square, node spacing = ~86px, 5 intervals per side
 # Node margin: 46px (x: 46~474)
@@ -101,9 +101,9 @@ const CONNECTIONS: Array = [
 const BIG_NODES: Array = [0, 5, 10, 15, 22]
 
 # Player tray area bounds (dynamic layout)
-const TRAY_Y_START := 570.0
-const TRAY_Y_END   := 720.0
-const TRAY_HEIGHT  := 150.0  # TRAY_Y_END - TRAY_Y_START
+const TRAY_Y_START := 568.0
+const TRAY_Y_END   := 698.0
+const TRAY_HEIGHT  := 130.0  # TRAY_Y_END - TRAY_Y_START
 
 var player_count: int = 2  # set dynamically
 
@@ -355,40 +355,56 @@ func _draw_lines() -> void:
 				draw_circle(dp, 1.5, Color(GBC_LINE, 0.35))
 
 func _draw_nodes() -> void:
+	var hl_color := Color("58B068")  # Soft emerald green for highlights
+
+	# First pass: draw highlight glow BEHIND nodes
+	for hl_id in highlight_nodes:
+		if not NODE_POSITIONS.has(hl_id):
+			continue
+		var hl_pos: Vector2 = NODE_POSITIONS[hl_id]
+		var hl_big: bool = hl_id in BIG_NODES
+		var hl_r: float = BIG_RADIUS if hl_big else SMALL_RADIUS
+		var hl_pulse: float = 0.5 + sin(Time.get_ticks_msec() * 0.006) * 0.3
+
+		# Filled glow circle behind node
+		draw_circle(hl_pos, hl_r + 8, Color(hl_color, hl_pulse * 0.4))
+		# Outer glow ring
+		draw_arc(hl_pos, hl_r + 12, 0, TAU, 32, Color(hl_color, hl_pulse * 0.6), 3.0)
+
+	# Second pass: draw all nodes
 	for node_id in NODE_POSITIONS:
 		var pos: Vector2 = NODE_POSITIONS[node_id]
 		var is_big: bool = node_id in BIG_NODES
 		var is_highlight: bool = node_id in highlight_nodes
+		var nr: float = BIG_RADIUS if is_big else SMALL_RADIUS
 
 		# Use sprite textures for nodes
 		var tex = TEX_NODE_BIG if is_big else TEX_NODE_SMALL
 		if tex:
 			var tex_size = tex.get_size()
-			var tint = GBC_BRIGHT if is_highlight else Color.WHITE
-			draw_texture(tex, pos - tex_size * 0.5, tint)
+			draw_texture(tex, pos - tex_size * 0.5, Color.WHITE)
 		else:
-			var r: float = BIG_RADIUS if is_big else SMALL_RADIUS
-			draw_circle(pos, r + 2, GBC_DARK)
-			draw_circle(pos, r, GBC_BRIGHT if is_highlight else GBC_NODE)
+			draw_circle(pos, nr + 2, GBC_DARK)
+			draw_circle(pos, nr, GBC_NODE)
 
-		# Highlight glow for destination nodes (softer, cute)
+		# Highlight overlay ON TOP of node — bright pulsing ring
 		if is_highlight:
-			var pulse = 0.3 + sin(Time.get_ticks_msec() * 0.005) * 0.15
-			draw_arc(pos, (BIG_RADIUS if is_big else SMALL_RADIUS) + 4, 0, TAU, 24,
-				Color(GBC_BRIGHT, pulse), 2.0)
+			var hp: float = 0.7 + sin(Time.get_ticks_msec() * 0.006) * 0.3
+			# Thick bright ring around node
+			draw_arc(pos, nr + 3, 0, TAU, 32, Color(hl_color, hp), 3.5)
+			# Inner accent ring
+			draw_arc(pos, nr - 2, 0, TAU, 24, Color(hl_color, hp * 0.5), 1.5)
 
-		# Start/finish node — cute flower ring instead of harsh arcs
+		# Start/finish node — cute flower ring
 		if node_id == 0:
-			var r: float = BIG_RADIUS
-			# Soft double ring
-			draw_arc(pos, r + 5, 0, TAU, 32, Color(GBC_MID, 0.5), 1.5)
-			draw_arc(pos, r + 8, 0, TAU, 32, Color(GBC_LINE, 0.4), 1.5)
-			# Tiny flower accents around start node
+			var sr: float = BIG_RADIUS
+			draw_arc(pos, sr + 5, 0, TAU, 32, Color(GBC_MID, 0.5), 1.5)
+			draw_arc(pos, sr + 8, 0, TAU, 32, Color(GBC_LINE, 0.4), 1.5)
 			if TEX_DECO_FLOWER:
 				var flower_sz = TEX_DECO_FLOWER.get_size()
 				for angle_deg in [45, 135, 225, 315]:
-					var angle = deg_to_rad(angle_deg)
-					var fp = pos + Vector2(cos(angle), sin(angle)) * (r + 12) - flower_sz * 0.5
+					var fangle = deg_to_rad(angle_deg)
+					var fp = pos + Vector2(cos(fangle), sin(fangle)) * (sr + 12) - flower_sz * 0.5
 					draw_texture(TEX_DECO_FLOWER, fp, Color(1, 1, 1, 0.5))
 
 	# "S" label for start with paw accent
@@ -398,9 +414,9 @@ func _draw_nodes() -> void:
 		draw_texture(TEX_DECO_PAW, Vector2(456, 533), Color(1, 1, 1, 0.3))
 
 func _draw_player_trays() -> void:
-	# ═══ PLAYER TRAY SECTION: y=566~724 ═══
-	var ty := TRAY_Y_START - 4  # 566
-	var th := TRAY_HEIGHT + 8    # 158
+	# ═══ PLAYER TRAY SECTION: y=564~702 ═══
+	var ty := TRAY_Y_START - 4  # 564
+	var th := TRAY_HEIGHT + 8    # 138
 	var count = maxi(player_count, 2)
 	var row_h = TRAY_HEIGHT / count
 	var font = ThemeDB.fallback_font
@@ -461,9 +477,9 @@ func _draw_player_trays() -> void:
 			draw_circle(Vector2(sx, sy), 8, Color(GBC_LINE, 0.2))
 
 func _draw_throw_area() -> void:
-	# ═══ THROW AREA SECTION: y=720~922 ═══
-	var area_y := 720.0
-	var area_h := 202.0
+	# ═══ THROW AREA SECTION: y=700~870 ═══
+	var area_y := 700.0
+	var area_h := 170.0
 
 	if TEX_FRAME_THROW:
 		draw_texture_rect(TEX_FRAME_THROW, Rect2(0, area_y, 520, area_h), false)

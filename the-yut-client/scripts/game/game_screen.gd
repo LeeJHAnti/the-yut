@@ -1,10 +1,10 @@
 extends Control
 
-## Game screen — 520×960 portrait layout
+## Game screen — 520×960 portrait layout (compact for ad banner)
 ##   y=0~34:    Turn marquee (h=34, 한줄 전광판)
 ##   y=36~566:  Board (h=530, 428×428 node area)
-##   y=570~720: Player piece trays (h=150, dynamic split)
-##   y=720~922: Yut throw area (h=202)
+##   y=568~698: Player piece trays (h=130, dynamic split)
+##   y=700~870: Yut throw area (h=170)
 ##
 ## Game flow:
 ##   1. Player throws yut (flick or tap)
