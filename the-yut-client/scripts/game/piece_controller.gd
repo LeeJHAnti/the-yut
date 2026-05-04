@@ -1,11 +1,11 @@
 extends Node2D
 
 ## Piece controller — Sprite-based zodiac animal pieces
-## Uses pixel art sprite assets instead of manual _draw() calls.
+## Uses animated sprite sheets with 5 states × 4 frames per animal.
 
 const ParticleEffects = preload("res://scripts/game/particle_effects.gd")
 
-# ═══ Preload sprite textures — 12 Zodiac Animals ═══
+# ═══ Preload sprite textures — 12 Zodiac Animals (base) ═══
 const ZODIAC_SPRITES: Array = [
 	preload("res://assets/sprites/piece_rat.png"),       # 0: 쥐
 	preload("res://assets/sprites/piece_ox.png"),        # 1: 소
@@ -20,6 +20,30 @@ const ZODIAC_SPRITES: Array = [
 	preload("res://assets/sprites/piece_dog.png"),       # 10: 개
 	preload("res://assets/sprites/piece_pig.png"),       # 11: 돼지
 ]
+
+# ═══ Animation sprite sheets — 5 rows × 4 columns per animal ═══
+# Rows: 0=idle, 1=happy, 2=sad, 3=selected, 4=victory
+const ZODIAC_ANIM_SHEETS: Array = [
+	preload("res://assets/sprites/anim/piece_rat_anim.png"),
+	preload("res://assets/sprites/anim/piece_ox_anim.png"),
+	preload("res://assets/sprites/anim/piece_tiger_anim.png"),
+	preload("res://assets/sprites/anim/piece_rabbit_anim.png"),
+	preload("res://assets/sprites/anim/piece_dragon_anim.png"),
+	preload("res://assets/sprites/anim/piece_snake_anim.png"),
+	preload("res://assets/sprites/anim/piece_horse_anim.png"),
+	preload("res://assets/sprites/anim/piece_sheep_anim.png"),
+	preload("res://assets/sprites/anim/piece_monkey_anim.png"),
+	preload("res://assets/sprites/anim/piece_rooster_anim.png"),
+	preload("res://assets/sprites/anim/piece_dog_anim.png"),
+	preload("res://assets/sprites/anim/piece_pig_anim.png"),
+]
+
+# Animation state enum
+enum AnimState { IDLE = 0, HAPPY = 1, SAD = 2, SELECTED = 3, VICTORY = 4 }
+const ANIM_FRAME_W := 48
+const ANIM_FRAME_H := 48
+const ANIM_FRAMES_PER_ROW := 4
+const ANIM_FPS := 6.0  # frames per second for sprite sheet animation
 const ZODIAC_NAMES: Array = [
 	"쥐", "소", "호랑이", "토끼", "용", "뱀",
 	"말", "양", "원숭이", "닭", "개", "돼지",
@@ -66,11 +90,14 @@ var bob_time: float = 0.0
 var ghost_trail: Array = []
 var base_position: Vector2 = Vector2.ZERO  # fixed reference position
 
-# ─── EXPRESSION ANIMATION STATE ───
-var expression_timer: float = 0.0       # countdown for next expression event
-var expression_active: bool = false     # currently showing expression
-var expression_type: int = 0            # 0=blink, 1=happy bounce, 2=sparkle
-var expression_progress: float = 0.0    # 0~1 animation progress
+# ─── SPRITE SHEET ANIMATION STATE ───
+var anim_state: int = AnimState.IDLE      # current animation state (row in sheet)
+var anim_time: float = 0.0               # time accumulator for frame cycling
+var anim_frame: int = 0                  # current frame index (0-3)
+var is_capture_sad: bool = false         # show sad face before capture fly-away
+var capture_sad_timer: float = 0.0       # duration of sad expression display
+var happy_timer: float = 0.0            # timed happy expression after landing
+
 var land_squash_time: float = -1.0      # >0 = playing landing squash animation
 
 func set_base_position(pos: Vector2) -> void:
@@ -78,41 +105,46 @@ func set_base_position(pos: Vector2) -> void:
 	position = pos
 
 func _process(delta: float) -> void:
+	# ─── Update animation state based on context ───
+	_update_anim_state()
+
+	# ─── Advance sprite sheet frame ───
+	anim_time += delta
+	var frame_duration := 1.0 / ANIM_FPS
+	if anim_time >= frame_duration:
+		anim_time -= frame_duration
+		anim_frame = (anim_frame + 1) % ANIM_FRAMES_PER_ROW
+		queue_redraw()
+
+	# ─── Capture sad timer ───
+	if is_capture_sad:
+		capture_sad_timer -= delta
+		if capture_sad_timer <= 0:
+			is_capture_sad = false
+			_play_capture_flyaway()
+
+	# ─── Happy timer (timed expression after landing) ───
+	if happy_timer > 0:
+		happy_timer -= delta
+		queue_redraw()
+
+	# Always advance bob_time for scale pulse / breathing effects
+	bob_time += delta * 4.0
+
 	# Position control (skip during animations and drags)
 	if not is_animating and not is_dragging:
 		if is_selected:
-			# Selected piece: gentle bob relative to base_position
-			bob_time += delta * 5.0
-			position.y = base_position.y + sin(bob_time) * 2.0
+			position.y = base_position.y + sin(bob_time * 1.3) * 3.5
 			queue_redraw()
 		elif is_completed_circuit:
-			# Completed circuit pieces: subtle pulse animation
-			bob_time += delta * 3.0
 			queue_redraw()
 		elif is_turn_bounce and is_home_display:
-			# Current turn's home pieces: subtle breathing bounce
-			bob_time += delta * 3.0
-			position.y = base_position.y + sin(bob_time) * 1.0
+			position.y = base_position.y + sin(bob_time) * 2.0
+			queue_redraw()
+		elif happy_timer > 0:
 			queue_redraw()
 		elif base_position != Vector2.ZERO:
-			# Not selected, not bouncing: lock to base position
 			position = base_position
-
-	# Expression animation tick (on-board pieces only)
-	if piece_status == "OnBoard" and not is_dragging:
-		if expression_active:
-			expression_progress += delta * 4.0
-			if expression_progress >= 1.0:
-				expression_active = false
-				expression_progress = 0.0
-				expression_timer = randf_range(3.0, 7.0)
-			queue_redraw()
-		else:
-			expression_timer -= delta
-			if expression_timer <= 0:
-				expression_active = true
-				expression_type = randi() % 3  # blink, happy, sparkle
-				expression_progress = 0.0
 
 	# Landing squash animation
 	if land_squash_time >= 0:
@@ -162,7 +194,7 @@ func _draw() -> void:
 	for g in ghost_trail:
 		var ghost_color = Color(GBC_MID_DARK, g.alpha * 0.4)
 		var ghost_pos = g.pos - global_position + position
-		_draw_zodiac_at(ghost_pos, ghost_color, 0.8)
+		_draw_zodiac_at(ghost_pos, ghost_color, 0.8, false)
 
 	var color = PLAYER_COLORS[owner_id % 4]
 	var piece_scale = 1.1
@@ -171,15 +203,18 @@ func _draw() -> void:
 		var t = land_squash_time
 		var squash_x = 1.0 + sin(t * PI) * 0.25
 		var squash_y = 1.0 - sin(t * PI) * 0.20
-		piece_scale *= squash_y  # vertical squash applied via scale
-		# We'll handle squash via draw transform instead
+		piece_scale *= squash_y
 		draw_set_transform(Vector2.ZERO, 0, Vector2(squash_x, squash_y))
+	# Gentle scale pulse when happy or selected (breathing effect)
+	elif anim_state == AnimState.HAPPY or anim_state == AnimState.SELECTED:
+		var pulse = 1.0 + sin(bob_time * 4.0) * 0.06
+		piece_scale *= pulse
+	# Victory bounce pulse
+	elif anim_state == AnimState.VICTORY:
+		var pulse = 1.0 + sin(bob_time * 5.0) * 0.08
+		piece_scale *= pulse
 
 	_draw_zodiac_at(Vector2.ZERO, color, piece_scale)
-
-	# Expression overlay (on-board only)
-	if expression_active:
-		_draw_expression(piece_scale)
 
 	if land_squash_time >= 0:
 		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
@@ -198,77 +233,72 @@ func _draw() -> void:
 		_draw_stack_badges(0.9)
 
 # ═══════════════════════════════════════════════════
-# SPRITE-BASED ZODIAC DRAWING
+# ANIMATION STATE MANAGEMENT
 # ═══════════════════════════════════════════════════
 
-func _draw_zodiac_at(pos: Vector2, color: Color, s: float) -> void:
+func _update_anim_state() -> void:
+	## Determine current animation state based on piece context
+	var new_state := AnimState.IDLE
+	if is_capture_sad:
+		new_state = AnimState.SAD
+	elif is_completed_circuit:
+		new_state = AnimState.VICTORY
+	elif is_selected:
+		new_state = AnimState.SELECTED
+	elif land_squash_time >= 0 or happy_timer > 0:
+		new_state = AnimState.HAPPY
+	elif piece_status == "OnBoard":
+		new_state = AnimState.IDLE
+	# Reset frame on state change for snappy transitions
+	if new_state != anim_state:
+		anim_frame = 0
+		anim_time = 0.0
+	anim_state = new_state
+
+# ═══════════════════════════════════════════════════
+# SPRITE-BASED ZODIAC DRAWING (with animation sheets)
+# ═══════════════════════════════════════════════════
+
+func _draw_zodiac_at(pos: Vector2, color: Color, s: float, use_anim: bool = true) -> void:
 	var sprite_idx = zodiac_index % ZODIAC_SPRITES.size()
+	var alpha = color.a
+
+	# Player-colored base circle (beneath the sprite)
+	var frame_size := Vector2(ANIM_FRAME_W, ANIM_FRAME_H)
+	var draw_size = frame_size * s
+	var base_r = max(draw_size.x, draw_size.y) * 0.40
+	if alpha > 0.15:
+		draw_circle(pos + Vector2(1, 2) * s, base_r, Color(GBC_DARK, 0.2 * alpha))
+		draw_circle(pos, base_r, Color(color.r, color.g, color.b, 0.45 * alpha))
+		draw_arc(pos, base_r, 0, TAU, 16, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
+
+	# Try animated sprite sheet first
+	if use_anim and sprite_idx < ZODIAC_ANIM_SHEETS.size():
+		var sheet = ZODIAC_ANIM_SHEETS[sprite_idx]
+		if sheet != null:
+			var src_rect = Rect2(
+				anim_frame * ANIM_FRAME_W,
+				anim_state * ANIM_FRAME_H,
+				ANIM_FRAME_W, ANIM_FRAME_H
+			)
+			var dst_rect = Rect2(pos - draw_size * 0.5, draw_size)
+			draw_texture_rect_region(sheet, dst_rect, src_rect, Color(1.0, 1.0, 1.0, alpha))
+			return
+
+	# Fallback to base sprite
 	var tex = ZODIAC_SPRITES[sprite_idx]
 	if tex == null:
 		draw_circle(pos, 14 * s, color)
 		return
 	var tex_size = tex.get_size()
-	var draw_size = tex_size * s
+	draw_size = tex_size * s
 	var offset = pos - draw_size * 0.5
-	var alpha = color.a
-
-	# Player-colored base circle (beneath the sprite)
-	var base_r = max(draw_size.x, draw_size.y) * 0.40
-	if alpha > 0.15:
-		# Drop shadow
-		draw_circle(pos + Vector2(1, 2) * s, base_r, Color(GBC_DARK, 0.2 * alpha))
-		# Player color disc
-		draw_circle(pos, base_r, Color(color.r, color.g, color.b, 0.45 * alpha))
-		# Player color ring
-		draw_arc(pos, base_r, 0, TAU, 16, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
-
-	# Draw sprite with original pastel colors (alpha only, no color tint)
 	draw_texture_rect(tex, Rect2(offset, draw_size), false, Color(1.0, 1.0, 1.0, alpha))
-
-func _draw_expression(s: float) -> void:
-	## Draw expression overlay effects on the piece
-	var t = expression_progress
-	match expression_type:
-		0:  # BLINK — close eyes briefly
-			if t < 0.3 or t > 0.7:
-				return  # only show blink in the middle
-			var blink_alpha = sin((t - 0.3) / 0.4 * PI) * 0.9
-			# Draw small horizontal lines over eye area
-			var eye_y = -4.0 * s
-			draw_line(Vector2(-6 * s, eye_y), Vector2(-2 * s, eye_y),
-				Color(GBC_DARK, blink_alpha), 2.0 * s)
-			draw_line(Vector2(2 * s, eye_y), Vector2(6 * s, eye_y),
-				Color(GBC_DARK, blink_alpha), 2.0 * s)
-		1:  # HAPPY — draw ^_^ eyes and bounce
-			var happy_alpha = sin(t * PI)
-			var eye_y = -4.0 * s
-			# ^  ^ eyes
-			draw_line(Vector2(-6 * s, eye_y), Vector2(-4 * s, eye_y - 2 * s),
-				Color(GBC_DARK, happy_alpha), 1.5 * s)
-			draw_line(Vector2(-4 * s, eye_y - 2 * s), Vector2(-2 * s, eye_y),
-				Color(GBC_DARK, happy_alpha), 1.5 * s)
-			draw_line(Vector2(2 * s, eye_y), Vector2(4 * s, eye_y - 2 * s),
-				Color(GBC_DARK, happy_alpha), 1.5 * s)
-			draw_line(Vector2(4 * s, eye_y - 2 * s), Vector2(6 * s, eye_y),
-				Color(GBC_DARK, happy_alpha), 1.5 * s)
-		2:  # SPARKLE — tiny stars around the piece
-			var sparkle_alpha = sin(t * PI) * 0.8
-			var sparkle_r = 16.0 * s
-			for si in range(3):
-				var angle = t * TAU + si * TAU / 3.0
-				var sp = Vector2(cos(angle) * sparkle_r, sin(angle) * sparkle_r - 4 * s)
-				var star_sz = 2.0 * s
-				draw_line(sp + Vector2(-star_sz, 0), sp + Vector2(star_sz, 0),
-					Color("E0C898", sparkle_alpha), 1.5)
-				draw_line(sp + Vector2(0, -star_sz), sp + Vector2(0, star_sz),
-					Color("E0C898", sparkle_alpha), 1.5)
 
 func trigger_land_expression() -> void:
 	## Called when piece lands on the board — triggers squash + happy expression
 	land_squash_time = 0.0
-	expression_active = true
-	expression_type = 1  # happy
-	expression_progress = 0.0
+	happy_timer = 1.2  # show happy face for 1.2 seconds after landing
 
 func _draw_selection_ring(s: float, alpha: float) -> void:
 	if TEX_SELECTION_RING:
@@ -314,8 +344,6 @@ func setup(p_id: int, p_owner: int, p_zodiac: int = -1) -> void:
 		zodiac_index = p_zodiac % ZODIAC_SPRITES.size()
 	else:
 		zodiac_index = randi() % ZODIAC_SPRITES.size()
-	# Randomize initial expression timer so pieces don't all blink at once
-	expression_timer = randf_range(2.0, 8.0)
 	queue_redraw()
 
 func animate_move(path: Array, on_complete: Callable) -> void:
@@ -364,20 +392,34 @@ func animate_capture() -> void:
 	ParticleEffects.spawn_impact(get_parent(), position)
 	ParticleEffects.spawn_stars(get_parent(), position, 12)
 
+	# Phase 1: Show SAD face for 0.8 seconds before flying away
+	is_capture_sad = true
+	capture_sad_timer = 0.8
+
+	# Brief hit flash
 	var tween = create_tween()
-	# Brief "hit flash" — scale up then pause for dramatic effect
-	tween.tween_property(self, "scale", Vector2(1.6, 1.6), 0.04)
-	tween.tween_property(self, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.03)  # white flash
-	tween.tween_interval(0.06)  # freeze moment
+	tween.tween_property(self, "scale", Vector2(1.4, 1.4), 0.04)
+	tween.tween_property(self, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.03)
+	tween.tween_interval(0.06)
 	tween.tween_property(self, "modulate", Color.WHITE, 0.02)
-	# Fly away with spin
+	# Sad shake: wiggle left-right while sad
+	tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.05)
+	tween.tween_property(self, "position:x", position.x - 3, 0.06)
+	tween.tween_property(self, "position:x", position.x + 3, 0.06)
+	tween.tween_property(self, "position:x", position.x - 2, 0.06)
+	tween.tween_property(self, "position:x", position.x, 0.06)
+	# Hold sad face
+	tween.tween_interval(0.25)
+
+func _play_capture_flyaway() -> void:
+	## Phase 2: Fly away after sad expression
+	var tween = create_tween()
 	var fly_dir = Vector2(randf_range(-80, 80), -100)
 	tween.tween_property(self, "position", position + fly_dir, 0.35) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tween.parallel().tween_property(self, "rotation", randf_range(-5, 5), 0.35)
 	tween.parallel().tween_property(self, "scale", Vector2(0.2, 0.2), 0.35)
 	tween.parallel().tween_property(self, "modulate:a", 0.0, 0.3)
-	# Spawn extra dust at the capture point
 	tween.parallel().tween_callback(func():
 		ParticleEffects.spawn_dust(get_parent(), position, 8)
 	).set_delay(0.05)
@@ -389,6 +431,7 @@ func animate_capture() -> void:
 		scale = Vector2.ONE
 		modulate.a = 1.0
 		base_position = Vector2.ZERO
+		anim_state = AnimState.IDLE
 	)
 
 func animate_finish() -> void:
@@ -413,6 +456,7 @@ func animate_finish() -> void:
 		scale = Vector2.ONE
 		modulate.a = 1.0
 		base_position = Vector2.ZERO
+		anim_state = AnimState.IDLE
 	)
 
 func animate_stack() -> void:

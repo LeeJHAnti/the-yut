@@ -12,6 +12,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Inject AdSense (safety net)
+        run: python build.py --ads-only
+
       - name: Setup Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 

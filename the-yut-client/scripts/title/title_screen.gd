@@ -38,6 +38,7 @@ var join_mode: bool = false
 var deco_time: float = 0.0
 
 func _ready() -> void:
+	AudioManager.play_bgm("title")
 	name_input.text = GameState.player_name
 	join_code_input.visible = false
 	room_list_panel.visible = false
@@ -91,6 +92,7 @@ func _on_name_changed(new_text: String) -> void:
 	GameState.player_name = new_text
 
 func _on_quick_start() -> void:
+	AudioManager.play_sfx("ui_click")
 	status_label.text = "Joining..."
 	if not NetworkManager.is_server_connected():
 		NetworkManager.connect_to_server()
@@ -99,6 +101,7 @@ func _on_quick_start() -> void:
 	NetworkManager.send_message({"type": "quick_match", "payload": {}})
 
 func _on_create_room() -> void:
+	AudioManager.play_sfx("ui_click")
 	status_label.text = "Creating room..."
 	if not NetworkManager.is_server_connected():
 		NetworkManager.connect_to_server()
@@ -107,6 +110,7 @@ func _on_create_room() -> void:
 	NetworkManager.send_message({"type": "create_room", "payload": {}})
 
 func _on_join_room() -> void:
+	AudioManager.play_sfx("ui_click")
 	if not join_mode:
 		join_mode = true
 		join_code_input.visible = true
@@ -205,6 +209,7 @@ func _on_room_list_received(result: int, response_code: int, _headers: PackedStr
 	room_list_panel.visible = true
 
 func _join_room_by_code(code: String) -> void:
+	AudioManager.play_sfx("ui_click")
 	join_code_input.text = code
 	status_label.text = "Joining " + code + "..."
 	if not NetworkManager.is_server_connected():
@@ -214,6 +219,7 @@ func _join_room_by_code(code: String) -> void:
 	NetworkManager.send_message({"type": "join_room", "payload": {"code": code}})
 
 func _on_info_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
 	var rules = rules_scene.instantiate()
 	add_child(rules)

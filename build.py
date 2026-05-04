@@ -42,16 +42,19 @@ ADSENSE_CSS = """\
 #ad-top {
 \twidth: 100%;
 \tmax-width: 728px;
-\tmin-height: 50px;
-\tmax-height: 90px;
 \ttext-align: center;
-\tbackground: #111;
 \tflex-shrink: 0;
 \toverflow: hidden;
 \tz-index: 10;
 }
+/* Collapse ad container when empty (no min-height!) */
+#ad-top:empty,
+#ad-top .adsbygoogle[data-ad-status="unfilled"] {
+\tdisplay: none !important;
+}
+
 #game-container {
-\tflex: 1;
+\tflex: 1 1 0;
 \twidth: 100%;
 \tdisplay: flex;
 \tjustify-content: center;
@@ -60,8 +63,16 @@ ADSENSE_CSS = """\
 \toverflow: hidden;
 \tmin-height: 0;
 }
-@media (max-height: 500px) {
-\t#ad-top { display: none; }
+
+/* ── Mobile: hide ad on short screens to prevent game cutoff ── */
+@media (max-height: 600px) {
+\t#ad-top { display: none !important; }
+}
+/* ── Desktop: constrain ad height ── */
+@media (min-height: 601px) {
+\t#ad-top {
+\t\tmax-height: 100px;
+\t}
 }"""
 
 AD_BANNER_DIV = (
@@ -70,7 +81,7 @@ AD_BANNER_DIV = (
     '\t\t\t\tstyle="display:block"\n'
     f'\t\t\t\tdata-ad-client="{AD_CLIENT}"\n'
     f'\t\t\t\tdata-ad-slot="{AD_SLOT}"\n'
-    '\t\t\t\tdata-ad-format="horizontal"\n'
+    '\t\t\t\tdata-ad-format="auto"\n'
     '\t\t\t\tdata-full-width-responsive="true"></ins>\n'
     '\t\t\t<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>\n'
     '\t\t</div>'

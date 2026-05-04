@@ -85,17 +85,21 @@ func _input(event: InputEvent) -> void:
 		if x < 130:
 			if current_page > 0:
 				current_page -= 1
+				AudioManager.play_sfx("ui_click")
 		elif x > 390:
 			if current_page < total_pages - 1:
 				current_page += 1
+				AudioManager.play_sfx("ui_click")
 		else:
 			# Tap center to advance
 			if current_page < total_pages - 1:
 				current_page += 1
+				AudioManager.play_sfx("ui_click")
 			else:
 				_close()
 
 func _close() -> void:
+	AudioManager.play_sfx("ui_back")
 	closed.emit()
 	queue_free()
 

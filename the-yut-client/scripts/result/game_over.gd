@@ -49,7 +49,11 @@ func _on_game_over(winner_id: int, winner_name: String) -> void:
 	else:
 		winner_label.text = winner_name + "\nWINS!"
 
-	AudioManager.play_sfx("game_over")
+	AudioManager.fade_bgm(0.5)
+	if is_my_win:
+		AudioManager.play_bgm("victory")
+	else:
+		AudioManager.play_sfx("game_over")
 
 	# Victory animation: scale bounce
 	var tween = create_tween()
@@ -122,8 +126,10 @@ func _draw() -> void:
 		draw_texture_rect(tex, Rect2(pos, ts * 1.5), false, Color(1, 1, 1, 0.6))
 
 func _on_play_again() -> void:
+	AudioManager.play_sfx("ui_click")
 	NetworkManager.send_message({"type": "start_game", "payload": {}})
 
 func _on_exit() -> void:
+	AudioManager.play_sfx("ui_back")
 	GameState.reset()
 	get_parent().go_to_title()

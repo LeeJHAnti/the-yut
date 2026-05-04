@@ -54,6 +54,7 @@ var used_zodiac_indices: Array = []  # track which zodiac indices are assigned
 var _yut_anim_playing: bool = false  # true while yut animation is in progress
 
 func _ready() -> void:
+	AudioManager.play_bgm("ingame")
 	pieces_container = Node2D.new()
 	pieces_container.name = "Pieces"
 	board.add_child(pieces_container)
@@ -343,6 +344,7 @@ func _result_to_distance(result: String) -> int:
 func _show_path_choice(paths: Array) -> void:
 	_hide_all_actions()
 	path_choice_panel.visible = true
+	AudioManager.play_sfx("path_choice")
 	# Clear old buttons from the Buttons HBoxContainer
 	var buttons_container = path_choice_panel.get_node("VBox/Buttons")
 	for child in buttons_container.get_children():
@@ -371,6 +373,7 @@ func _show_path_choice(paths: Array) -> void:
 # ─── INPUT HANDLERS ───
 
 func _on_yut_flicked(power: float) -> void:
+	AudioManager.play_sfx("yut_throw")
 	yut_input.enabled = false
 	action_popup.visible = false
 	NetworkManager.send_message({
@@ -585,6 +588,7 @@ func _show_finish_confirm(piece_id: int) -> void:
 	AudioManager.play_sfx("piece_pickup")
 
 func _on_finish_confirm_yes() -> void:
+	AudioManager.play_sfx("ui_click")
 	var pid = finish_confirm_piece_id
 	finish_confirm_panel.visible = false
 	finish_confirm_piece_id = -1
@@ -592,6 +596,7 @@ func _on_finish_confirm_yes() -> void:
 		_select_piece(pid)
 
 func _on_finish_confirm_no() -> void:
+	AudioManager.play_sfx("ui_back")
 	finish_confirm_panel.visible = false
 	finish_confirm_piece_id = -1
 	# Let player pick a different piece or throw
@@ -601,6 +606,7 @@ func _on_finish_confirm_no() -> void:
 		_set_action("")
 
 func _on_path_chosen(choice: String) -> void:
+	AudioManager.play_sfx("ui_click")
 	path_choice_panel.visible = false
 	action_popup.visible = false
 	NetworkManager.send_message({
@@ -651,6 +657,21 @@ func _on_server_message(data: Dictionary) -> void:
 			var new_node = int(payload.get("new_position", 0))
 			var captured = payload.get("captured", [])
 			var finished = payload.get("finished", false)
+			# Detect stacking: if another friendly piece is already on target node
+			if not finished and captured.size() == 0:
+				var moving_owner = -1
+				for pd in GameState.pieces:
+					if int(pd.get("id", -1)) == piece_id:
+						moving_owner = int(pd.get("owner", -1))
+						break
+				if moving_owner >= 0:
+					for pd in GameState.pieces:
+						var pid = int(pd.get("id", -1))
+						if pid != piece_id and int(pd.get("owner", -1)) == moving_owner \
+								and pd.get("status", "") == "OnBoard" \
+								and int(pd.get("node_id", -1)) == new_node:
+							AudioManager.play_sfx("piece_stack")
+							break
 			_animate_piece_move(piece_id, new_node, captured, finished)
 
 		"path_choice_required":
@@ -800,6 +821,7 @@ func _animate_piece_move(piece_id: int, target_node: int, captured: Array, finis
 			camera.shake(2.0, 0.1)
 			_handle_post_move_captures(captured)
 		)
+		AudioManager.play_sfx("piece_deploy")
 	else:
 		piece_node.visible = true
 		piece_node.piece_status = "OnBoard"
@@ -807,8 +829,7 @@ func _animate_piece_move(piece_id: int, target_node: int, captured: Array, finis
 			camera.shake(1.5, 0.08)
 			_handle_post_move_captures(captured)
 		)
-
-	AudioManager.play_sfx("piece_move")
+		AudioManager.play_sfx("piece_move")
 
 func _handle_post_move_captures(captured: Array) -> void:
 	if captured.size() > 0:
