@@ -44,7 +44,7 @@ var chosen_snap_node: int = -1
 
 # ─── FINISH CONFIRM STATE ───
 var finish_confirm_piece_id: int = -1
-var finish_confirm_panel: HBoxContainer = null
+var finish_confirm_panel: PanelContainer = null
 
 # ─── PLAYER ZODIAC (one animal per player, from 12 zodiac, no duplicates) ───
 var player_zodiac: Dictionary = {}  # player_id → zodiac_index
@@ -125,10 +125,10 @@ func _ready() -> void:
 	finish_vbox.add_child(finish_desc)
 
 	# Button row
-	finish_confirm_panel = HBoxContainer.new()
-	finish_confirm_panel.alignment = BoxContainer.ALIGNMENT_CENTER
-	finish_confirm_panel.add_theme_constant_override("separation", 16)
-	finish_vbox.add_child(finish_confirm_panel)
+	var btn_row = HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	finish_vbox.add_child(btn_row)
 
 	# YES button (green accent)
 	var yes_btn = Button.new()
@@ -147,7 +147,7 @@ func _ready() -> void:
 	yes_btn.add_theme_stylebox_override("normal", yes_style)
 	yes_btn.add_theme_color_override("font_color", Color("3A7A42"))
 	yes_btn.pressed.connect(_on_finish_confirm_yes)
-	finish_confirm_panel.add_child(yes_btn)
+	btn_row.add_child(yes_btn)
 
 	# NO button (red accent)
 	var no_btn = Button.new()
@@ -166,9 +166,9 @@ func _ready() -> void:
 	no_btn.add_theme_stylebox_override("normal", no_style)
 	no_btn.add_theme_color_override("font_color", Color("B03830"))
 	no_btn.pressed.connect(_on_finish_confirm_no)
-	finish_confirm_panel.add_child(no_btn)
+	btn_row.add_child(no_btn)
 
-	# Store container reference for visibility toggle
+	# Store outer PanelContainer for visibility toggle
 	finish_confirm_panel = finish_panel_container
 
 # ─── STATE MANAGEMENT ───
