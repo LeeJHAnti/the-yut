@@ -36,9 +36,8 @@ async fn main() -> std::io::Result<()> {
                     .add((header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"))
                     .add((header::PRAGMA, "no-cache"))
                     .add((header::EXPIRES, "0"))
-                    // Required for Godot WASM SharedArrayBuffer support
-                    .add(("Cross-Origin-Opener-Policy", "same-origin"))
-                    .add(("Cross-Origin-Embedder-Policy", "require-corp"))
+                    // NOTE: COOP/COEP removed — threads are disabled (GODOT_THREADS_ENABLED=false)
+                    // and require-corp blocks cross-origin AdSense scripts.
             )
             .app_data(web::Data::new(rooms.clone()))
             // WebSocket route MUST be registered before static files

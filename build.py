@@ -179,7 +179,18 @@ def inject_adsense() -> None:
     if marker in html:
         html = html.replace(marker, f"\n{ADSENSE_CSS}\n{marker}", 1)
 
-    # (3) body CSS: flexbox 추가
+    # (3a) html, body에 width/height: 100% 추가 (flex 레이아웃에 필수)
+    if "width: 100%;\n\theight: 100%;" not in html:
+        for reset_target in ["html, body, #canvas {", "html, body {"]:
+            if reset_target in html:
+                html = html.replace(
+                    reset_target,
+                    reset_target + "\n\twidth: 100%;\n\theight: 100%;",
+                    1,
+                )
+                break
+
+    # (3b) body CSS: flexbox 추가
     # Godot의 body 스타일 블록에 flex 레이아웃 삽입
     # 주의: #status 등 다른 요소에도 flex가 있으므로 body 블록만 정확히 매칭
     import re as _re
@@ -193,6 +204,12 @@ def inject_adsense() -> None:
         # 배경색도 어둡게 통일
         new_body = _re.sub(r'background-color:\s*[^;]+;', 'background-color: #1a1a1a;', new_body)
         html = html.replace(old_body, new_body, 1)
+
+    # (3c) COEP 비활성화 — 스레드 미사용 시 불필요하고 AdSense를 차단함
+    html = html.replace(
+        '"ensureCrossOriginIsolationHeaders":true',
+        '"ensureCrossOriginIsolationHeaders":false',
+    )
 
     # (4) <body>: 광고 배너 div + game-container 래퍼 삽입
     if '<div id="ad-top">' not in html:
