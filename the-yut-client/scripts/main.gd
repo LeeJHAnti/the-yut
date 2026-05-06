@@ -19,6 +19,14 @@ func _show_screen(screen_name: String) -> void:
 	game_screen.visible = (screen_name == "game")
 	game_over_screen.visible = (screen_name == "gameover")
 
+	# ── BGM switching per screen ──
+	match screen_name:
+		"title":
+			AudioManager.play_bgm("title")
+		"game":
+			AudioManager.play_bgm("ingame")
+		# "gameover" BGM is handled by game_over.gd with fade
+
 func _on_state_updated() -> void:
 	match GameState.phase:
 		"WaitingForPlayers":

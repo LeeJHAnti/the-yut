@@ -835,6 +835,7 @@ func _handle_post_move_captures(captured: Array) -> void:
 	if captured.size() > 0:
 		camera.freeze_frame(0.06)
 		camera.heavy_shake(0.3)
+		AudioManager.play_sfx("piece_burst")
 		AudioManager.play_sfx("piece_capture")
 
 	for cid in captured:

@@ -50,10 +50,14 @@ func _on_game_over(winner_id: int, winner_name: String) -> void:
 		winner_label.text = winner_name + "\nWINS!"
 
 	AudioManager.fade_bgm(0.5)
-	if is_my_win:
-		AudioManager.play_bgm("victory")
-	else:
-		AudioManager.play_sfx("game_over")
+	# Wait for fade to finish, then play victory or game_over sound
+	get_tree().create_timer(0.55).timeout.connect(func():
+		if is_my_win:
+			AudioManager.play_bgm("victory")
+		else:
+			AudioManager.play_bgm("victory")
+			AudioManager.play_sfx("game_over")
+	)
 
 	# Victory animation: scale bounce
 	var tween = create_tween()
