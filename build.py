@@ -53,6 +53,21 @@ ADSENSE_CSS = """\
 \tdisplay: none !important;
 }
 
+/* ── Mobile bottom ad (hidden by default, shown via JS for mobile) ── */
+#ad-bottom {
+\tdisplay: none;
+\twidth: 100%;
+\tmax-width: 728px;
+\ttext-align: center;
+\tflex-shrink: 0;
+\toverflow: hidden;
+\tz-index: 10;
+}
+#ad-bottom:empty,
+#ad-bottom .adsbygoogle[data-ad-status="unfilled"] {
+\tdisplay: none !important;
+}
+
 #game-container {
 \tflex: 1 1 0;
 \twidth: 100%;
@@ -64,15 +79,19 @@ ADSENSE_CSS = """\
 \tmin-height: 0;
 }
 
-/* ── Mobile: hide ad on short screens to prevent game cutoff ── */
-@media (max-height: 600px) {
+/* ── Mobile: hide top ad entirely, show bottom ad only if tall enough ── */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
 \t#ad-top { display: none !important; }
+\t#ad-bottom.mobile-active { display: block; max-height: 60px; }
 }
-/* ── Desktop: constrain ad height ── */
-@media (min-height: 601px) {
-\t#ad-top {
-\t\tmax-height: 100px;
-\t}
+/* ── Very short screens: hide ALL ads ── */
+@media (max-height: 600px) {
+\t#ad-top, #ad-bottom { display: none !important; }
+}
+/* ── Desktop: constrain top ad height, hide bottom ── */
+@media (min-width: 769px) and (hover: hover) {
+\t#ad-top { max-height: 100px; }
+\t#ad-bottom { display: none !important; }
 }"""
 
 AD_BANNER_DIV = (
@@ -81,11 +100,35 @@ AD_BANNER_DIV = (
     '\t\t\t\tstyle="display:block"\n'
     f'\t\t\t\tdata-ad-client="{AD_CLIENT}"\n'
     f'\t\t\t\tdata-ad-slot="{AD_SLOT}"\n'
-    '\t\t\t\tdata-ad-format="auto"\n'
-    '\t\t\t\tdata-full-width-responsive="true"></ins>\n'
+    '\t\t\t\tdata-ad-format="horizontal"\n'
+    '\t\t\t\tdata-full-width-responsive="false"></ins>\n'
     '\t\t\t<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>\n'
     '\t\t</div>'
 )
+
+AD_BOTTOM_DIV = (
+    '\t\t<div id="ad-bottom">\n'
+    '\t\t\t<ins class="adsbygoogle"\n'
+    '\t\t\t\tstyle="display:block"\n'
+    f'\t\t\t\tdata-ad-client="{AD_CLIENT}"\n'
+    f'\t\t\t\tdata-ad-slot="{AD_SLOT}"\n'
+    '\t\t\t\tdata-ad-format="horizontal"\n'
+    '\t\t\t\tdata-full-width-responsive="false"></ins>\n'
+    '\t\t\t<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>\n'
+    '\t\t</div>'
+)
+
+# JS to detect mobile and activate appropriate ad placement
+MOBILE_AD_SCRIPT = """<script>
+(function() {
+\tvar isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+\t\t|| (navigator.maxTouchPoints > 0 && window.innerWidth <= 768);
+\tvar adBottom = document.getElementById('ad-bottom');
+\tif (isMobile && adBottom && window.innerHeight > 600) {
+\t\tadBottom.classList.add('mobile-active');
+\t}
+})();
+</script>"""
 
 SEO_META = '<meta name="description" content="Play Yutnori online! A traditional Korean board game with cute pixel art.">'
 
@@ -222,7 +265,7 @@ def inject_adsense() -> None:
         '"ensureCrossOriginIsolationHeaders":false',
     )
 
-    # (4) <body>: 광고 배너 div + game-container 래퍼 삽입
+    # (4) <body>: 광고 배너 div + game-container 래퍼 + 하단 광고 삽입
     if '<div id="ad-top">' not in html:
         body_marker = "<body>"
         if body_marker in html:
@@ -237,7 +280,7 @@ def inject_adsense() -> None:
             if js_marker in html:
                 html = html.replace(
                     js_marker,
-                    f'</div><!-- /game-container -->\n\n\t\t<script src="index.js">',
+                    f'</div><!-- /game-container -->\n\n{AD_BOTTOM_DIV}\n{MOBILE_AD_SCRIPT}\n\n\t\t<script src="index.js">',
                     1,
                 )
 

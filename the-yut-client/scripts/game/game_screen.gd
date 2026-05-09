@@ -53,6 +53,11 @@ var used_zodiac_indices: Array = []  # track which zodiac indices are assigned
 # ─── INPUT GUARD (prevent duplicate prompt setup) ───
 var _yut_anim_playing: bool = false  # true while yut animation is in progress
 
+# ─── DECIDING ORDER STATE ───
+var _order_phase_active: bool = false
+var _order_results_display: Dictionary = {}  # player_id → {result, distance}
+var _order_panel: PanelContainer = null
+
 func _ready() -> void:
 	AudioManager.play_bgm("ingame")
 	pieces_container = Node2D.new()
@@ -65,6 +70,10 @@ func _ready() -> void:
 	GameState.state_updated.connect(_on_state_updated)
 	GameState.turn_changed.connect(_on_turn_changed)
 	GameState.error_received.connect(_on_error)
+	GameState.order_your_turn.connect(_on_order_your_turn)
+	GameState.order_throw_result.connect(_on_order_throw_result)
+	GameState.order_tie.connect(_on_order_tie)
+	GameState.order_decided.connect(_on_order_decided)
 	NetworkManager.message_received.connect(_on_server_message)
 
 	_hide_all_actions()
@@ -111,7 +120,7 @@ func _ready() -> void:
 
 	# Title label with decorative arrows
 	var finish_label = Label.new()
-	finish_label.text = ">> FINISH? <<"
+	finish_label.text = "FINISH?"
 	finish_label.add_theme_font_size_override("font_size", 18)
 	finish_label.add_theme_color_override("font_color", Color("503820"))
 	finish_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -133,7 +142,7 @@ func _ready() -> void:
 
 	# YES button (green accent)
 	var yes_btn = Button.new()
-	yes_btn.text = "> YES"
+	yes_btn.text = "YES"
 	yes_btn.add_theme_font_size_override("font_size", 16)
 	yes_btn.custom_minimum_size = Vector2(100, 42)
 	var yes_style = StyleBoxFlat.new()
@@ -152,7 +161,7 @@ func _ready() -> void:
 
 	# NO button (red accent)
 	var no_btn = Button.new()
-	no_btn.text = "> NO"
+	no_btn.text = "NO"
 	no_btn.add_theme_font_size_override("font_size", 16)
 	no_btn.custom_minimum_size = Vector2(100, 42)
 	var no_style = StyleBoxFlat.new()
@@ -172,6 +181,53 @@ func _ready() -> void:
 	# Store outer PanelContainer for visibility toggle
 	finish_confirm_panel = finish_panel_container
 
+	# ─── Create order determination panel (center of screen) ───
+	_order_panel = PanelContainer.new()
+	_order_panel.name = "OrderPanel"
+	_order_panel.visible = false
+	_order_panel.custom_minimum_size = Vector2(400, 0)
+	_order_panel.position = Vector2(60, 300)
+	var order_style = StyleBoxFlat.new()
+	order_style.bg_color = Color("F8F0D8")
+	order_style.border_color = Color("503820")
+	order_style.set_border_width_all(3)
+	order_style.set_corner_radius_all(6)
+	order_style.content_margin_left = 16
+	order_style.content_margin_right = 16
+	order_style.content_margin_top = 12
+	order_style.content_margin_bottom = 14
+	order_style.shadow_color = Color(0, 0, 0, 0.2)
+	order_style.shadow_size = 4
+	_order_panel.add_theme_stylebox_override("panel", order_style)
+	add_child(_order_panel)
+
+	var order_vbox = VBoxContainer.new()
+	order_vbox.name = "OrderVBox"
+	order_vbox.add_theme_constant_override("separation", 6)
+	_order_panel.add_child(order_vbox)
+
+	var order_title = Label.new()
+	order_title.name = "OrderTitle"
+	order_title.text = "TURN ORDER"
+	order_title.add_theme_font_size_override("font_size", 18)
+	order_title.add_theme_color_override("font_color", Color("503820"))
+	order_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	order_vbox.add_child(order_title)
+
+	var order_desc = Label.new()
+	order_desc.name = "OrderDesc"
+	order_desc.text = "Throw yut to decide who goes first!"
+	order_desc.add_theme_font_size_override("font_size", 13)
+	order_desc.add_theme_color_override("font_color", Color("907040"))
+	order_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	order_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	order_vbox.add_child(order_desc)
+
+	var order_results_container = VBoxContainer.new()
+	order_results_container.name = "OrderResults"
+	order_results_container.add_theme_constant_override("separation", 4)
+	order_vbox.add_child(order_results_container)
+
 # ─── STATE MANAGEMENT ───
 
 func _on_state_updated() -> void:
@@ -184,6 +240,11 @@ func _on_state_updated() -> void:
 func _on_turn_changed(player_id: int) -> void:
 	_refresh_marquee()
 	_update_current_turn_index()
+
+	# During order phase, turn_changed is used after order is decided
+	# to start the actual game — don't interfere during active order phase
+	if _order_phase_active:
+		return
 
 	# If yut animation is playing, don't set up prompts now.
 	# _on_yut_anim_finished will handle it when the animation ends.
@@ -204,18 +265,23 @@ func _on_turn_changed(player_id: int) -> void:
 		_set_action(pname + "'s turn...")
 
 func _refresh_marquee() -> void:
+	# During order phase, show special marquee
+	if _order_phase_active:
+		turn_marquee.text = "DECIDING TURN ORDER"
+		return
+
 	var current = GameState.current_turn
 	var pname = _get_player_name(current)
 	var is_me = (current == GameState.player_id)
 
 	if is_me:
-		var marquee = ">> YOUR TURN <<"
+		var marquee = "YOUR TURN"
 		if GameState.pending_results.size() > 0:
 			marquee += "  [" + ", ".join(GameState.pending_results) + "]"
 		turn_marquee.text = marquee
 	else:
 		var is_ally = GameState.is_team_mode() and GameState.are_teammates(GameState.player_id, current)
-		var prefix = "(ALLY) " if is_ally else ""
+		var prefix = "ALLY " if is_ally else ""
 		var marquee = prefix + pname + "'s Turn"
 		if GameState.pending_results.size() > 0:
 			marquee += "  [" + ", ".join(GameState.pending_results) + "]"
@@ -353,15 +419,13 @@ func _show_path_choice(paths: Array) -> void:
 		var btn = Button.new()
 		var display = path_name.to_upper()
 		if path_name == "shortcut":
-			display = "> SHORTCUT"
+			display = "SHORTCUT"
 		elif path_name == "outer":
-			display = "> OUTER"
+			display = "OUTER"
 		elif path_name == "center_exit":
-			display = "> TO HOME"
+			display = "TO HOME"
 		elif path_name == "continue":
-			display = "> CONTINUE"
-		else:
-			display = "> " + display
+			display = "CONTINUE"
 		btn.text = display
 		btn.add_theme_font_size_override("font_size", 16)
 		btn.custom_minimum_size = Vector2(140, 44)
@@ -376,14 +440,25 @@ func _on_yut_flicked(power: float) -> void:
 	AudioManager.play_sfx("yut_throw")
 	yut_input.enabled = false
 	action_popup.visible = false
-	NetworkManager.send_message({
-		"type": "throw_yut",
-		"payload": {"gesture_power": power}
-	})
+	# During order phase, send order_throw instead of throw_yut
+	if _order_phase_active:
+		NetworkManager.send_message({
+			"type": "order_throw",
+			"payload": {"gesture_power": power}
+		})
+	else:
+		NetworkManager.send_message({
+			"type": "throw_yut",
+			"payload": {"gesture_power": power}
+		})
 
 func _on_yut_anim_finished() -> void:
 	yut_animation.clear()
 	_yut_anim_playing = false
+
+	# During order phase, don't do normal turn logic
+	if _order_phase_active:
+		return
 
 	# Don't interrupt if player is already interacting (dragging, choosing path)
 	if _is_input_active():
@@ -785,7 +860,33 @@ func _sync_pieces() -> void:
 			piece_node.visible = false
 
 		var stacked = piece_data.get("stacked_with", [])
-		piece_node.set_stack(1 + stacked.size())
+		# Build zodiac info for stacked pieces (for side-by-side team display)
+		# Group by zodiac to get per-zodiac count (lead piece + stacked of same zodiac)
+		var zodiac_info: Array = []
+		if stacked.size() > 0 and GameState.is_team_mode():
+			# Count per zodiac: {zodiac_idx: {owner, count}}
+			var lead_zodiac = player_zodiac.get(owner, 0)
+			var zodiac_counts: Dictionary = {}
+			# Lead piece itself
+			zodiac_counts[lead_zodiac] = {"zodiac": lead_zodiac, "owner": owner, "count": 1}
+			for sid in stacked:
+				var sid_int = int(sid)
+				for spd in GameState.pieces:
+					if int(spd.get("id", -1)) == sid_int:
+						var stk_owner = int(spd.get("owner", 0))
+						var stk_zodiac = player_zodiac.get(stk_owner, 0)
+						if zodiac_counts.has(stk_zodiac):
+							zodiac_counts[stk_zodiac]["count"] += 1
+						else:
+							zodiac_counts[stk_zodiac] = {"zodiac": stk_zodiac, "owner": stk_owner, "count": 1}
+						break
+			# Build array: lead zodiac first, then others
+			if zodiac_counts.has(lead_zodiac):
+				zodiac_info.append(zodiac_counts[lead_zodiac])
+			for zk in zodiac_counts:
+				if zk != lead_zodiac:
+					zodiac_info.append(zodiac_counts[zk])
+		piece_node.set_stack(1 + stacked.size(), zodiac_info)
 		piece_node.queue_redraw()
 
 func _create_piece_node(piece_id: int, owner_id: int) -> void:
@@ -820,6 +921,8 @@ func _animate_piece_move(piece_id: int, target_node: int, captured: Array, finis
 		piece_node.animate_deploy(target_pos, func():
 			camera.shake(2.0, 0.1)
 			_handle_post_move_captures(captured)
+			# Immediately sync to apply stacking visuals within same turn
+			_sync_pieces()
 		)
 		AudioManager.play_sfx("piece_deploy")
 	else:
@@ -828,6 +931,8 @@ func _animate_piece_move(piece_id: int, target_node: int, captured: Array, finis
 		piece_node.animate_move([target_pos], func():
 			camera.shake(1.5, 0.08)
 			_handle_post_move_captures(captured)
+			# Immediately sync to apply stacking visuals within same turn
+			_sync_pieces()
 		)
 		AudioManager.play_sfx("piece_move")
 
@@ -920,7 +1025,120 @@ func _check_input_recovery() -> void:
 			return
 
 	# We're stuck — re-enable the appropriate input
+	if GameState.phase == "DecidingOrder":
+		return  # Order phase handled separately
 	if GameState.must_throw:
 		_show_throw_prompt()
 	elif GameState.pending_results.size() > 0:
 		_show_piece_select()
+
+# ─── DECIDING ORDER PHASE ───
+
+func _on_order_your_turn(player_id: int) -> void:
+	_order_phase_active = true
+	_order_panel.visible = true
+	_update_order_panel()
+
+	if player_id == GameState.player_id:
+		# It's my turn to throw for order
+		_set_action("Throw to decide turn order!")
+		yut_input.visible = true
+		yut_input.enabled = true
+	else:
+		var pname = _get_player_name(player_id)
+		_set_action(pname + " is throwing...")
+		yut_input.visible = false
+		yut_input.enabled = false
+
+func _on_order_throw_result(player_id: int, result: String, distance: int) -> void:
+	_order_results_display[player_id] = {"result": result, "distance": distance}
+	_update_order_panel()
+
+	# Play yut animation
+	_yut_anim_playing = true
+	yut_animation.play_throw_animation(result, false)
+	camera.shake(3.0, 0.15)
+
+func _on_order_tie(tied_players: Array) -> void:
+	# Reset displayed results for tied players (they will re-throw)
+	for pid_str in tied_players:
+		var pid = int(pid_str)
+		if _order_results_display.has(pid):
+			_order_results_display.erase(pid)
+	_update_order_panel()
+
+	# Show tie notification
+	var desc_node = _order_panel.get_node("OrderVBox/OrderDesc")
+	if desc_node:
+		desc_node.text = "TIE! Re-throw needed!"
+	AudioManager.play_sfx("path_choice")
+
+func _on_order_decided(player_order: Array) -> void:
+	_order_phase_active = false
+
+	# Show final order briefly with player names
+	var desc_node = _order_panel.get_node("OrderVBox/OrderDesc")
+	if desc_node:
+		var names: Array = []
+		for p in player_order:
+			names.append(p.get("name", "???"))
+		desc_node.text = " > ".join(names)
+
+	# Brief pause to show results, then auto-transition
+	await get_tree().create_timer(1.8).timeout
+	_order_panel.visible = false
+	_order_results_display.clear()
+
+	# Trigger recovery to ensure throw prompt is shown for the first player
+	_check_input_recovery()
+
+func _update_order_panel() -> void:
+	if not _order_panel:
+		return
+	var results_container = _order_panel.get_node("OrderVBox/OrderResults")
+	if not results_container:
+		return
+
+	# Clear old result labels
+	for child in results_container.get_children():
+		child.queue_free()
+
+	# Show each player who has thrown
+	for p in GameState.players:
+		var pid = int(p.get("id", -1))
+		# Only show throwers
+		var is_thrower = false
+		for tid in GameState.order_throwers:
+			if int(tid) == pid:
+				is_thrower = true
+				break
+		if not is_thrower:
+			# In team mode, show teammate info too
+			if GameState.is_team_mode():
+				var teammate_is_thrower = false
+				for tid in GameState.order_throwers:
+					if GameState.are_teammates(pid, int(tid)):
+						teammate_is_thrower = true
+						break
+				if not teammate_is_thrower:
+					continue
+			else:
+				continue
+
+		var pname = p.get("name", "???")
+		var result_label = Label.new()
+		result_label.add_theme_font_size_override("font_size", 15)
+		result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		if _order_results_display.has(pid):
+			var r = _order_results_display[pid]
+			var result_str = r["result"]
+			var dist = r["distance"]
+			result_label.text = pname + ": " + result_str + " (" + str(dist) + ")"
+			result_label.add_theme_color_override("font_color", Color("503820"))
+		else:
+			result_label.text = pname + ": waiting..."
+			result_label.add_theme_color_override("font_color", Color("B89868"))
+
+		results_container.add_child(result_label)
+

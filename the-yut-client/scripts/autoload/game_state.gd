@@ -4,6 +4,10 @@ signal state_updated
 signal turn_changed(player_id: int)
 signal game_over_signal(winner_id: int, winner_name: String)
 signal error_received(message: String)
+signal order_your_turn(player_id: int)
+signal order_throw_result(player_id: int, result: String, distance: int)
+signal order_tie(tied_players: Array)
+signal order_decided(player_order: Array)
 
 var player_id: int = -1
 var player_name: String = ""
@@ -19,6 +23,11 @@ var must_throw: bool = true
 var phase: String = "WaitingForPlayers"
 var winner: int = -1
 var teams: Array = []  # [[id_a, id_b], [id_c, id_d]] for 4-player team mode, empty otherwise
+
+# DecidingOrder state
+var order_throwers: Array = []
+var order_results: Array = []  # [{player_id, distance}, ...]
+var order_current_idx: int = 0
 
 func _ready() -> void:
 	NetworkManager.message_received.connect(_on_message)
@@ -62,7 +71,7 @@ func _on_message(data: Dictionary) -> void:
 
 		"game_started":
 			players = payload.get("players", [])
-			phase = "Throwing"
+			phase = "DecidingOrder"
 			state_updated.emit()
 
 		"your_turn":
@@ -97,6 +106,25 @@ func _on_message(data: Dictionary) -> void:
 			phase = "GameOver"
 			game_over_signal.emit(winner_id, winner_name_str)
 
+		"order_your_turn":
+			var order_pid = int(payload.get("player_id", "0"))
+			order_your_turn.emit(order_pid)
+
+		"order_throw_result":
+			var order_pid = int(payload.get("player_id", "0"))
+			var order_result = payload.get("result", "")
+			var order_dist = int(payload.get("distance", 0))
+			order_throw_result.emit(order_pid, order_result, order_dist)
+
+		"order_tie":
+			var tied = payload.get("tied_players", [])
+			order_tie.emit(tied)
+
+		"order_decided":
+			var porder = payload.get("player_order", [])
+			phase = "Throwing"
+			order_decided.emit(porder)
+
 		"error":
 			var message = payload.get("message", "Unknown error")
 			print("[Server Error] ", message)
@@ -119,6 +147,12 @@ func _apply_sync(data: Dictionary) -> void:
 		teams = data["teams"]
 	elif data.has("teams"):
 		teams = []
+	if data.has("order_throwers"):
+		order_throwers = data["order_throwers"]
+	if data.has("order_results"):
+		order_results = data["order_results"]
+	if data.has("order_current_idx"):
+		order_current_idx = int(data["order_current_idx"])
 
 func is_my_turn() -> bool:
 	return current_turn == player_id
@@ -163,3 +197,6 @@ func reset() -> void:
 	phase = "WaitingForPlayers"
 	winner = -1
 	teams = []
+	order_throwers = []
+	order_results = []
+	order_current_idx = 0

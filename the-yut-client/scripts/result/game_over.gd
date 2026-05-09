@@ -50,12 +50,10 @@ func _on_game_over(winner_id: int, winner_name: String) -> void:
 		winner_label.text = winner_name + "\nWINS!"
 
 	AudioManager.fade_bgm(0.5)
-	# Wait for fade to finish, then play victory or game_over sound
+	# Wait for fade to finish, then play gameover BGM
 	get_tree().create_timer(0.55).timeout.connect(func():
-		if is_my_win:
-			AudioManager.play_bgm("victory")
-		else:
-			AudioManager.play_bgm("victory")
+		AudioManager.play_bgm("gameover")
+		if not is_my_win:
 			AudioManager.play_sfx("game_over")
 	)
 

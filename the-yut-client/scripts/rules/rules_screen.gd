@@ -46,7 +46,10 @@ func _draw() -> void:
 
 	# Title bar
 	draw_rect(Rect2(14, 14, 492, 36), Color(BORDER, 0.1))
-	_draw_text_centered(">> HOW TO PLAY <<", 260, 38, 18, TEXT_DARK)
+	_draw_text_centered("HOW TO PLAY", 260, 38, 18, TEXT_DARK)
+	# Pixel-art diamond decorations beside title
+	_draw_diamond(Vector2(140, 32), 4.0, Color("F8D878"), Color("D0A030"))
+	_draw_diamond(Vector2(380, 32), 4.0, Color("F8D878"), Color("D0A030"))
 
 	# Page indicator dots
 	for i in range(total_pages):
@@ -171,7 +174,7 @@ func _draw_page_overview() -> void:
 		draw_circle(Vector2(px, 672), 8, Color(RUBY, 0.6))
 		_draw_text_centered(str(i + 1), px, 677, 10, Color.WHITE)
 
-	_draw_text_centered("tap to continue >>", 260, 900, 12, Color(TEXT_LIGHT, 0.5 + sin(anim_time * 2.0) * 0.3))
+	_draw_text_centered("tap to continue", 260, 900, 12, Color(TEXT_LIGHT, 0.5 + sin(anim_time * 2.0) * 0.3))
 
 # ─── PAGE 1: Throw results ───
 func _draw_page_throw() -> void:
@@ -262,7 +265,7 @@ func _draw_page_throw() -> void:
 			draw_circle(Vector2(220, y + 42), 4, RED)
 			_draw_text("<", 228, y + 46, 10, RED)
 
-	_draw_text_centered("<< prev    next >>", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
+	_draw_text_centered("prev    next", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
 
 # ─── PAGE 2: Board layout ───
 func _draw_page_board() -> void:
@@ -353,7 +356,7 @@ func _draw_page_board() -> void:
 	draw_dashed_line(Vector2(160, ly), Vector2(200, ly), BLUE, 2.0, 6.0)
 	_draw_text("Shortcut B (10 to 0)", 210, ly + 4, 11, BLUE)
 
-	_draw_text_centered("<< prev    next >>", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
+	_draw_text_centered("prev    next", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
 
 # ─── PAGE 3: Stack & Capture ───
 func _draw_page_stack_capture() -> void:
@@ -448,7 +451,7 @@ func _draw_page_stack_capture() -> void:
 		draw_line(Vector2(ex - 4, gy - 4), Vector2(ex + 4, gy + 4), RED, 1.5)
 		draw_line(Vector2(ex + 4, gy - 4), Vector2(ex - 4, gy + 4), RED, 1.5)
 
-	_draw_text_centered("<< prev    next >>", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
+	_draw_text_centered("prev    next", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
 
 # ─── PAGE 4: Shortcuts ───
 func _draw_page_shortcuts() -> void:
@@ -529,7 +532,7 @@ func _draw_page_shortcuts() -> void:
 	draw_circle(ap, 9, RUBY)
 	draw_circle(ap, 7, Color(RUBY, 0.6))
 
-	_draw_text_centered("<< prev    next >>", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
+	_draw_text_centered("prev    next", 260, 900, 12, Color(TEXT_LIGHT, 0.5))
 
 # ─── PAGE 5: Finishing ───
 func _draw_page_finish() -> void:
@@ -621,6 +624,17 @@ func _draw_text(text: String, x: float, y: float, size: int, color: Color) -> vo
 func _draw_text_centered(text: String, cx: float, y: float, size: int, color: Color) -> void:
 	var tw = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	draw_string(font, Vector2(cx - tw * 0.5, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
+func _draw_diamond(center: Vector2, size: float, fill: Color, outline: Color) -> void:
+	var pts = PackedVector2Array([
+		center + Vector2(0, -size),
+		center + Vector2(size, 0),
+		center + Vector2(0, size),
+		center + Vector2(-size, 0),
+	])
+	draw_colored_polygon(pts, fill)
+	for i in range(4):
+		draw_line(pts[i], pts[(i + 1) % 4], outline, 1.5)
 
 func _draw_arrow_left(x: float, y: float, color: Color) -> void:
 	draw_line(Vector2(x, y), Vector2(x + 12, y - 10), color, 2.5)

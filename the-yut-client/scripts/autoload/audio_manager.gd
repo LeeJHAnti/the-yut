@@ -28,14 +28,20 @@ const SFX_MAP: Dictionary = {
 	"path_choice":  preload("res://assets/audio/sfx/sfx_path_choice.wav"),
 }
 
-# ═══ BGM Preloads (multiple tracks per category for random playback) ═══
+# ═══ BGM Preloads ═══
+# Title: 1 fixed track  |  In-game: 5 random tracks  |  Game Over: 1 fixed track
+# Style: 90s Japanese arcade fusion jazz × Korean traditional (gugak) arrangement
 const BGM_TRACKS: Dictionary = {
-	"title":   [preload("res://assets/audio/bgm/bgm_title.mp3")],
-	"ingame":  [preload("res://assets/audio/bgm/bgm_ingame.mp3")],
-	"victory": [preload("res://assets/audio/bgm/bgm_victory.mp3")],
+	"title":    [preload("res://assets/audio/bgm/bgm_title.mp3")],
+	"ingame":   [
+		preload("res://assets/audio/bgm/bgm_ingame_1.mp3"),
+		preload("res://assets/audio/bgm/bgm_ingame_2.mp3"),
+		preload("res://assets/audio/bgm/bgm_ingame_3.mp3"),
+		preload("res://assets/audio/bgm/bgm_ingame_4.mp3"),
+		preload("res://assets/audio/bgm/bgm_ingame_5.mp3"),
+	],
+	"gameover": [preload("res://assets/audio/bgm/bgm_gameover.mp3")],
 }
-# Legacy single-track map (for backwards compat)
-var BGM_MAP: Dictionary = {}
 
 # ═══ Audio Players ═══
 var bgm_player: AudioStreamPlayer

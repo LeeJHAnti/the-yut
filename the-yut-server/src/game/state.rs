@@ -8,6 +8,7 @@ use super::yut::{YutResult, YutThrower};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GamePhase {
     WaitingForPlayers,
+    DecidingOrder,   // Pre-game: players throw yut to decide turn order
     Throwing,
     SelectingPiece,
     SelectingPath,
@@ -37,6 +38,14 @@ pub struct GameState {
     /// Team assignments for 4-player mode: [[team0_id_a, team0_id_b], [team1_id_a, team1_id_b]]
     /// None for ≤3 players (free-for-all).
     pub teams: Option<Vec<Vec<usize>>>,
+
+    // ── DecidingOrder state ──
+    /// Players who need to throw for order (in 2v2, one per team)
+    pub order_throwers: Vec<usize>,
+    /// Results: player_id → YutResult distance (higher = earlier turn)
+    pub order_results: Vec<(usize, u32)>,
+    /// Index into order_throwers: whose turn to throw next
+    pub order_current_idx: usize,
 }
 
 impl GameState {
@@ -52,6 +61,9 @@ impl GameState {
             winner: None,
             next_player_id: 0,
             teams: None,
+            order_throwers: Vec::new(),
+            order_results: Vec::new(),
+            order_current_idx: 0,
         }
     }
 
@@ -114,12 +126,152 @@ impl GameState {
             self.teams = None;
         }
 
-        self.turn = TurnManager::new(player_ids);
-        self.phase = GamePhase::Throwing;
+        self.turn = TurnManager::new(player_ids.clone());
         self.winner = None;
         self.pending_piece_id = None;
         self.pending_distance = None;
+
+        // Enter DecidingOrder phase — determine who throws
+        // 2v2: one player per team (first player of each team)
+        // FFA: all players throw
+        if self.players.len() == 4 {
+            // Team mode: player_ids[0] (team0) and player_ids[1] (team1)
+            self.order_throwers = vec![player_ids[0], player_ids[1]];
+        } else {
+            self.order_throwers = player_ids;
+        }
+        self.order_results.clear();
+        self.order_current_idx = 0;
+        self.phase = GamePhase::DecidingOrder;
+
         Ok(())
+    }
+
+    // ══════════════════════════════════════════════════════
+    // DECIDING ORDER — pre-game yut throw to determine turn order
+    // ══════════════════════════════════════════════════════
+
+    /// Current thrower in the DecidingOrder phase.
+    pub fn order_current_thrower(&self) -> Option<usize> {
+        if self.phase != GamePhase::DecidingOrder {
+            return None;
+        }
+        self.order_throwers.get(self.order_current_idx).copied()
+    }
+
+    /// Perform a yut throw during the DecidingOrder phase.
+    /// Returns (YutResult, is_all_done) — when all throws are done and no ties,
+    /// `is_all_done` is true and the caller should read the finalized player order.
+    pub fn order_throw(&mut self, player_id: usize) -> Result<(YutResult, bool), String> {
+        if self.phase != GamePhase::DecidingOrder {
+            return Err("Not in deciding order phase".to_string());
+        }
+        let expected = self.order_throwers.get(self.order_current_idx)
+            .copied()
+            .ok_or("No more throwers")?;
+        if player_id != expected {
+            return Err("Not your turn to throw for order".to_string());
+        }
+
+        let result = YutThrower::throw();
+        self.order_results.push((player_id, result.distance()));
+        self.order_current_idx += 1;
+
+        // Check if all throwers have thrown
+        if self.order_current_idx >= self.order_throwers.len() {
+            // Check for ties at the highest distance
+            let max_dist = self.order_results.iter().map(|(_, d)| *d).max().unwrap_or(0);
+            let tied: Vec<usize> = self.order_results.iter()
+                .filter(|(_, d)| *d == max_dist)
+                .map(|(pid, _)| *pid)
+                .collect();
+
+            if tied.len() > 1 {
+                // Tie — only tied players re-throw
+                self.order_throwers = tied;
+                self.order_results.clear();
+                self.order_current_idx = 0;
+                return Ok((result, false));
+            }
+
+            // No tie — finalize the order
+            self.finalize_order();
+            return Ok((result, true));
+        }
+
+        Ok((result, false))
+    }
+
+    /// Finalize turn order after all DecidingOrder throws complete with no ties.
+    /// Reorders the players array and rebuilds teams/TurnManager.
+    fn finalize_order(&mut self) {
+        // Sort results by distance descending (highest throws first)
+        let mut sorted = self.order_results.clone();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+
+        if self.players.len() == 4 {
+            // 2v2 mode: winner's team gets positions 1,3 — loser's team gets 2,4
+            let winner_id = sorted[0].0;
+            let loser_id = sorted[1].0;
+
+            // Find each thrower's team
+            let mut winner_team: Vec<usize> = Vec::new();
+            let mut loser_team: Vec<usize> = Vec::new();
+
+            if let Some(ref teams) = self.teams {
+                for team in teams {
+                    if team.contains(&winner_id) {
+                        winner_team = team.clone();
+                    }
+                    if team.contains(&loser_id) {
+                        loser_team = team.clone();
+                    }
+                }
+            }
+
+            // Reorder: winner_team[0], loser_team[0], winner_team[1], loser_team[1]
+            // The thrower goes first in their team
+            let w0 = winner_id;
+            let w1 = *winner_team.iter().find(|&&id| id != winner_id).unwrap_or(&winner_id);
+            let l0 = loser_id;
+            let l1 = *loser_team.iter().find(|&&id| id != loser_id).unwrap_or(&loser_id);
+
+            let new_order = vec![w0, l0, w1, l1];
+
+            // Reorder the players array to match
+            let mut new_players = Vec::new();
+            for &pid in &new_order {
+                if let Some(p) = self.players.iter().find(|p| p.id == pid) {
+                    new_players.push(p.clone());
+                }
+            }
+            self.players = new_players;
+
+            // Rebuild teams: [0,2] vs [1,3] based on new order
+            self.teams = Some(vec![
+                vec![new_order[0], new_order[2]],
+                vec![new_order[1], new_order[3]],
+            ]);
+
+            // Create TurnManager with new order
+            self.turn = TurnManager::new(new_order);
+        } else {
+            // FFA: sort all players by throw distance (highest first)
+            let new_order: Vec<usize> = sorted.iter().map(|(pid, _)| *pid).collect();
+
+            let mut new_players = Vec::new();
+            for &pid in &new_order {
+                if let Some(p) = self.players.iter().find(|p| p.id == pid) {
+                    new_players.push(p.clone());
+                }
+            }
+            self.players = new_players;
+            self.teams = None;
+            self.turn = TurnManager::new(new_order);
+        }
+
+        // Transition to the actual game
+        self.phase = GamePhase::Throwing;
     }
 
     pub fn throw_yut(&mut self, player_id: usize) -> Result<YutResult, String> {
@@ -746,7 +898,7 @@ impl GameState {
 
         let pending: Vec<String> = self.turn.pending_results.iter().map(|r| r.as_string()).collect();
 
-        json!({
+        let mut sync = json!({
             "phase": format!("{:?}", self.phase),
             "players": players,
             "pieces": pieces,
@@ -755,7 +907,19 @@ impl GameState {
             "must_throw": self.turn.should_throw(),
             "winner": self.winner,
             "teams": self.teams,
-        })
+        });
+
+        // Include DecidingOrder state when in that phase
+        if self.phase == GamePhase::DecidingOrder {
+            let order_results_json: Vec<serde_json::Value> = self.order_results.iter()
+                .map(|(pid, dist)| json!({"player_id": pid, "distance": dist}))
+                .collect();
+            sync["order_throwers"] = json!(self.order_throwers);
+            sync["order_results"] = json!(order_results_json);
+            sync["order_current_idx"] = json!(self.order_current_idx);
+        }
+
+        sync
     }
 }
 
@@ -800,7 +964,7 @@ mod tests {
         state.add_player("Alice".into(), "tok0".into());
         state.add_player("Bob".into(), "tok1".into());
         assert!(state.start_game().is_ok());
-        assert_eq!(state.phase, GamePhase::Throwing);
+        assert_eq!(state.phase, GamePhase::DecidingOrder);
         assert_eq!(state.pieces.len(), 8);
     }
 
@@ -836,6 +1000,8 @@ mod tests {
         state.add_player("Alice".into(), "tok0".into()); // player_id = 0
         state.add_player("Bob".into(), "tok1".into());   // player_id = 1
         state.start_game().unwrap();
+        // Skip DecidingOrder — go straight to Throwing for gameplay tests
+        state.phase = GamePhase::Throwing;
         state
     }
 

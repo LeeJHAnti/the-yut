@@ -10,6 +10,13 @@ use crate::messages::{ClientMessage, ServerMessage};
 use crate::room::{RoomMap, RoomManager};
 use crate::game::state::{GamePhase, MoveResult};
 
+/// Delay (ms) after a yut throw — must be longer than the client animation.
+/// Client yut animation takes ~1.7s (normal) / ~2.4s (extra turn).
+const BOT_THROW_DELAY_MS: u64 = 2000;
+const BOT_EXTRA_THROW_DELAY_MS: u64 = 2800;
+/// Delay (ms) after piece selection / path selection (no yut animation playing).
+const BOT_ACTION_DELAY_MS: u64 = 1200;
+
 struct WsClient {
     player_id: Option<usize>,
     room_code: Option<String>,
@@ -139,6 +146,7 @@ async fn handle_message(
         }
         "start_game" => handle_start_game(client, rooms, session).await,
         "throw_yut" => handle_throw_yut(client, rooms).await,
+        "order_throw" => handle_order_throw(client, rooms).await,
         "select_piece" => {
             let piece_id = msg.payload.get("piece_id")
                 .and_then(|v| v.as_u64())
@@ -388,17 +396,34 @@ async fn handle_start_game(client: &mut WsClient, rooms: &RoomMap, session: &mut
                     let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
                     room.broadcast(&sync);
 
-                    let current = room.state.turn.current_player;
-                    let turn_msg = ServerMessage::your_turn(current.to_string(), true);
-                    room.broadcast(&turn_msg);
+                    // Game starts in DecidingOrder phase — notify who throws first
+                    if room.state.phase == GamePhase::DecidingOrder {
+                        if let Some(first_thrower) = room.state.order_current_thrower() {
+                            let turn_msg = ServerMessage::order_your_turn(first_thrower.to_string());
+                            room.broadcast(&turn_msg);
 
-                    // If the first player is a bot, schedule its turn with a delay
-                    if check_needs_bot_turn(&room) {
-                        let rooms_clone = rooms.clone();
-                        let code_clone = room_code.clone();
-                        drop(room);
-                        schedule_bot_turn(rooms_clone, code_clone, 1500);
-                        return;
+                            // If first thrower is a bot, schedule order throw
+                            if room.state.players.iter().any(|p| p.id == first_thrower && p.is_bot) {
+                                let rooms_clone = rooms.clone();
+                                let code_clone = room_code.clone();
+                                drop(room);
+                                schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
+                                return;
+                            }
+                        }
+                    } else {
+                        // Fallback: if somehow already past DecidingOrder
+                        let current = room.state.turn.current_player;
+                        let turn_msg = ServerMessage::your_turn(current.to_string(), true);
+                        room.broadcast(&turn_msg);
+
+                        if check_needs_bot_turn(&room) {
+                            let rooms_clone = rooms.clone();
+                            let code_clone = room_code.clone();
+                            drop(room);
+                            schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
+                            return;
+                        }
                     }
                 }
                 Err(e) => {
@@ -474,8 +499,95 @@ async fn handle_throw_yut(client: &mut WsClient, rooms: &RoomMap) {
                                 let rooms_clone = rooms.clone();
                                 let code_clone = room_code.clone();
                                 drop(room);
-                                schedule_bot_turn(rooms_clone, code_clone, 1500);
+                                schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
                                 return;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err = ServerMessage::error(e);
+                    room.send_to(player_id, &err);
+                }
+            }
+        }
+    }
+}
+
+async fn handle_order_throw(client: &mut WsClient, rooms: &RoomMap) {
+    let player_id = match client.player_id {
+        Some(id) => id,
+        None => return,
+    };
+
+    if let Some(room_code) = &client.room_code {
+        if let Some(room_arc) = RoomManager::get_room(rooms, room_code) {
+            let mut room = room_arc.lock();
+
+            match room.state.order_throw(player_id) {
+                Ok((result, all_done)) => {
+                    // Broadcast the throw result
+                    let msg = ServerMessage::order_throw_result(
+                        player_id.to_string(),
+                        result.as_string(),
+                        result.distance(),
+                    );
+                    room.broadcast(&msg);
+
+                    if all_done {
+                        // Order decided — broadcast final order
+                        let player_order: Vec<serde_json::Value> = room.state.players.iter()
+                            .map(|p| serde_json::json!({
+                                "id": p.id,
+                                "name": &p.name,
+                            }))
+                            .collect();
+                        let decided_msg = ServerMessage::order_decided(player_order);
+                        room.broadcast(&decided_msg);
+
+                        // Send sync with new phase (Throwing) and updated player order
+                        let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                        room.broadcast(&sync);
+
+                        // Notify first player it's their turn to throw
+                        let current = room.state.turn.current_player;
+                        let turn_msg = ServerMessage::your_turn(current.to_string(), true);
+                        room.broadcast(&turn_msg);
+
+                        // Bot scheduling for first actual turn
+                        if check_needs_bot_turn(&room) {
+                            let rooms_clone = rooms.clone();
+                            let code_clone = room_code.clone();
+                            drop(room);
+                            schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
+                        }
+                    } else {
+                        // Check if there was a tie (throwers were reset)
+                        let throwers_reset = room.state.order_current_idx == 0
+                            && room.state.order_results.is_empty();
+                        if throwers_reset {
+                            let tied_ids: Vec<String> = room.state.order_throwers.iter()
+                                .map(|id| id.to_string())
+                                .collect();
+                            let tie_msg = ServerMessage::order_tie(tied_ids);
+                            room.broadcast(&tie_msg);
+                        }
+
+                        // Send sync
+                        let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                        room.broadcast(&sync);
+
+                        // Notify next thrower
+                        if let Some(next_thrower) = room.state.order_current_thrower() {
+                            let turn_msg = ServerMessage::order_your_turn(next_thrower.to_string());
+                            room.broadcast(&turn_msg);
+
+                            // If next thrower is a bot, schedule
+                            if room.state.players.iter().any(|p| p.id == next_thrower && p.is_bot) {
+                                let rooms_clone = rooms.clone();
+                                let code_clone = room_code.clone();
+                                drop(room);
+                                schedule_bot_turn(rooms_clone, code_clone, BOT_THROW_DELAY_MS);
                             }
                         }
                     }
@@ -503,7 +615,7 @@ async fn handle_select_piece(client: &mut WsClient, rooms: &RoomMap, piece_id: u
                 check_needs_bot_turn(&room)
             };
             if needs_bot {
-                schedule_bot_turn(rooms.clone(), room_code.clone(), 1500);
+                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_ACTION_DELAY_MS);
             }
         }
     }
@@ -523,7 +635,7 @@ async fn handle_select_path(client: &mut WsClient, rooms: &RoomMap, choice: &str
                 check_needs_bot_turn(&room)
             };
             if needs_bot {
-                schedule_bot_turn(rooms.clone(), room_code.clone(), 1500);
+                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_ACTION_DELAY_MS);
             }
         }
     }
@@ -658,6 +770,13 @@ fn check_needs_bot_turn(room: &crate::room::Room) -> bool {
     if room.state.phase == GamePhase::GameOver {
         return false;
     }
+    // During DecidingOrder, check the current order thrower instead
+    if room.state.phase == GamePhase::DecidingOrder {
+        if let Some(thrower) = room.state.order_current_thrower() {
+            return room.state.players.iter().any(|p| p.id == thrower && p.is_bot);
+        }
+        return false;
+    }
     let current = room.state.turn.current_player;
     room.get_bot_info(current).is_some()
 }
@@ -693,6 +812,75 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
         return (false, 0);
     }
 
+    // DecidingOrder: the actor is the order thrower, not turn.current_player
+    if room.state.phase == GamePhase::DecidingOrder {
+        let current_thrower = match room.state.order_current_thrower() {
+            Some(t) => t,
+            None => return (false, 0),
+        };
+        let is_bot = room.state.players.iter().any(|p| p.id == current_thrower && p.is_bot);
+        if !is_bot {
+            return (false, 0);
+        }
+        return match room.state.order_throw(current_thrower) {
+            Ok((result, all_done)) => {
+                let msg = ServerMessage::order_throw_result(
+                    current_thrower.to_string(),
+                    result.as_string(),
+                    result.distance(),
+                );
+                room.broadcast(&msg);
+
+                if all_done {
+                    let player_order: Vec<serde_json::Value> = room.state.players.iter()
+                        .map(|p| serde_json::json!({
+                            "id": p.id,
+                            "name": &p.name,
+                        }))
+                        .collect();
+                    let decided_msg = ServerMessage::order_decided(player_order);
+                    room.broadcast(&decided_msg);
+
+                    let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                    room.broadcast(&sync);
+
+                    let current_player = room.state.turn.current_player;
+                    let turn_msg = ServerMessage::your_turn(current_player.to_string(), true);
+                    room.broadcast(&turn_msg);
+
+                    (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
+                } else {
+                    // Check for tie
+                    let throwers_reset = room.state.order_current_idx == 0
+                        && room.state.order_results.is_empty();
+                    if throwers_reset {
+                        let tied_ids: Vec<String> = room.state.order_throwers.iter()
+                            .map(|id| id.to_string())
+                            .collect();
+                        let tie_msg = ServerMessage::order_tie(tied_ids);
+                        room.broadcast(&tie_msg);
+                    }
+
+                    let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                    room.broadcast(&sync);
+
+                    if let Some(next_thrower) = room.state.order_current_thrower() {
+                        let turn_msg = ServerMessage::order_your_turn(next_thrower.to_string());
+                        room.broadcast(&turn_msg);
+
+                        let is_bot = room.state.players.iter()
+                            .any(|p| p.id == next_thrower && p.is_bot);
+                        (is_bot, BOT_THROW_DELAY_MS)
+                    } else {
+                        (false, 0)
+                    }
+                }
+            }
+            Err(_) => (false, 0),
+        };
+    }
+
+    // Normal game phases: actor is turn.current_player
     let current = room.state.turn.current_player;
     let bot_info = match room.get_bot_info(current) {
         Some(info) => info.clone(),
@@ -715,8 +903,8 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                     room.broadcast(&msg);
 
                     if grants_extra {
-                        // Extra turn — throw again after delay
-                        (true, 1500)
+                        // Extra turn — throw again after longer delay (extra animation ~2.4s)
+                        (true, BOT_EXTRA_THROW_DELAY_MS)
                     } else {
                         // Check if auto-finish triggered game over
                         if room.state.phase == GamePhase::GameOver {
@@ -748,7 +936,8 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                         }
 
                         // Continue if current (possibly new) player is still a bot
-                        (check_needs_bot_turn(room), 1200)
+                        // Wait for yut animation to finish (~1.7s) before next action
+                        (check_needs_bot_turn(room), BOT_THROW_DELAY_MS)
                     }
                 }
                 Err(_) => (false, 0),
@@ -758,7 +947,7 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
             if let Some(piece_id) = BotAI::choose_piece(&room.state, current, bot_info.difficulty) {
                 process_piece_selection(room, current, piece_id, 0);
                 // Check if bot still needs to act (more results, or next player is bot)
-                (check_needs_bot_turn(room), 1500)
+                (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
             } else {
                 // No movable pieces, advance turn
                 room.state.turn.advance_turn();
@@ -766,7 +955,7 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                 let next = room.state.turn.current_player;
                 let turn_msg = ServerMessage::your_turn(next.to_string(), true);
                 room.broadcast(&turn_msg);
-                (check_needs_bot_turn(room), 1500)
+                (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
             }
         }
         GamePhase::SelectingPath => {
@@ -784,7 +973,7 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
 
             let choice = BotAI::choose_path(&room.state, current, &options, bot_info.difficulty);
             process_path_selection(room, current, &choice);
-            (check_needs_bot_turn(room), 1200)
+            (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
         }
         _ => (false, 0),
     }

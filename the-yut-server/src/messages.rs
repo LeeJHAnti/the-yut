@@ -134,6 +134,48 @@ impl ServerMessage {
         }
     }
 
+    /// Notify all clients whose turn it is to throw for order determination.
+    pub fn order_your_turn(player_id: String) -> Self {
+        Self {
+            msg_type: "order_your_turn".to_string(),
+            payload: json!({
+                "player_id": player_id,
+            }),
+        }
+    }
+
+    /// Broadcast the result of an order-determination throw.
+    pub fn order_throw_result(player_id: String, result: String, distance: u32) -> Self {
+        Self {
+            msg_type: "order_throw_result".to_string(),
+            payload: json!({
+                "player_id": player_id,
+                "result": result,
+                "distance": distance,
+            }),
+        }
+    }
+
+    /// Broadcast that a tie occurred and specific players must re-throw.
+    pub fn order_tie(tied_player_ids: Vec<String>) -> Self {
+        Self {
+            msg_type: "order_tie".to_string(),
+            payload: json!({
+                "tied_players": tied_player_ids,
+            }),
+        }
+    }
+
+    /// Broadcast the final decided turn order.
+    pub fn order_decided(player_order: Vec<serde_json::Value>) -> Self {
+        Self {
+            msg_type: "order_decided".to_string(),
+            payload: json!({
+                "player_order": player_order,
+            }),
+        }
+    }
+
     pub fn error(message: String) -> Self {
         Self {
             msg_type: "error".to_string(),

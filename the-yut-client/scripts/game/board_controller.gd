@@ -128,6 +128,11 @@ var REVERSE_GRAPH: Dictionary = {}  # for backward movement (BackDo)
 func _ready() -> void:
 	_build_graph()
 
+func _process(_delta: float) -> void:
+	# Continuously redraw for turn marker pulse animation
+	if current_turn_player_idx >= 0:
+		queue_redraw()
+
 func _build_graph() -> void:
 	GRAPH.clear()
 	REVERSE_GRAPH.clear()
@@ -308,6 +313,30 @@ func _draw_turn_marquee() -> void:
 		draw_rect(Rect2(0, 0, 520, 34), GBC_LINE, false, 2.0)
 		draw_rect(Rect2(3, 3, 514, 28), Color(GBC_LINE, 0.35), false, 1.0)
 
+	# Pixel-art diamond decorations on both sides of the marquee
+	var deco_col = Color("F8D878", 0.8)  # warm gold
+	var deco_col2 = Color("D0A030", 0.6)  # darker gold
+	var cy = 17.0  # vertical center of marquee
+	# Left diamond cluster
+	_draw_pixel_diamond(Vector2(18, cy), 4.0, deco_col, deco_col2)
+	_draw_pixel_diamond(Vector2(32, cy), 3.0, deco_col, deco_col2)
+	# Right diamond cluster
+	_draw_pixel_diamond(Vector2(502, cy), 4.0, deco_col, deco_col2)
+	_draw_pixel_diamond(Vector2(488, cy), 3.0, deco_col, deco_col2)
+
+func _draw_pixel_diamond(center: Vector2, size: float, fill: Color, outline: Color) -> void:
+	## Draws a pixel-art diamond shape
+	var pts = PackedVector2Array([
+		center + Vector2(0, -size),
+		center + Vector2(size, 0),
+		center + Vector2(0, size),
+		center + Vector2(-size, 0),
+	])
+	draw_colored_polygon(pts, fill)
+	# Outline
+	for i in range(4):
+		draw_line(pts[i], pts[(i + 1) % 4], outline, 1.5)
+
 func _draw_board_bg() -> void:
 	# ═══ BOARD SECTION: y=36~566 ═══
 	var by := 36.0
@@ -440,12 +469,25 @@ func _draw_player_trays() -> void:
 		if i > 0:
 			draw_line(Vector2(8, row_y), Vector2(512, row_y), Color(GBC_LINE, 0.3), 1.0)
 
-		# Highlight current turn row
+		# Highlight current turn row with animated glow
 		if is_current:
-			draw_rect(Rect2(4, row_y + 1, 512, row_h - 2), Color(GBC_LINE, 0.15))
-			# Turn arrow indicator
-			draw_string(font, Vector2(10, row_y + row_h * 0.5 + 4), ">",
-				HORIZONTAL_ALIGNMENT_LEFT, 20, 14, GBC_BRIGHT)
+			var pulse = 0.4 + sin(Time.get_ticks_msec() * 0.004) * 0.15
+			# Glowing background bar
+			draw_rect(Rect2(4, row_y + 1, 512, row_h - 2), Color(GBC_BRIGHT, pulse))
+			# Pixel-art turn arrow: 3 stacked chevrons
+			var ax = 14.0
+			var ay = row_y + row_h * 0.5
+			var arrow_col = Color("F8D878")  # warm gold
+			var arrow_col2 = Color("D0A030") # darker gold outline
+			# Outer chevron (outline)
+			draw_line(Vector2(ax - 1, ay - 6), Vector2(ax + 5, ay), arrow_col2, 2.0)
+			draw_line(Vector2(ax + 5, ay), Vector2(ax - 1, ay + 6), arrow_col2, 2.0)
+			# Inner chevron (bright)
+			draw_line(Vector2(ax, ay - 5), Vector2(ax + 4, ay), arrow_col, 2.0)
+			draw_line(Vector2(ax + 4, ay), Vector2(ax, ay + 5), arrow_col, 2.0)
+			# Second chevron
+			draw_line(Vector2(ax + 5, ay - 5), Vector2(ax + 9, ay), arrow_col, 2.0)
+			draw_line(Vector2(ax + 9, ay), Vector2(ax + 5, ay + 5), arrow_col, 2.0)
 
 		# Team badge (if in team mode)
 		var name_x = 26.0

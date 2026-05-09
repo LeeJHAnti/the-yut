@@ -79,6 +79,7 @@ const PLAYER_OUTLINE_COLORS: Array = [
 var zodiac_index: int = 0
 
 var stack_count: int = 1
+var stacked_zodiac_info: Array = []  # [{zodiac: int, owner: int}, ...] for side-by-side display
 var is_animating: bool = false
 var is_selected: bool = false
 var is_home_display: bool = false
@@ -171,10 +172,28 @@ func _draw() -> void:
 	if is_dragging:
 		var color = PLAYER_COLORS[owner_id % 4]
 		draw_circle(Vector2(4, 6), 28, Color(GBC_DARK, 0.5))
-		_draw_zodiac_at(Vector2.ZERO, color, 1.35)
+		var _drag_diff_zodiac = stacked_zodiac_info.size() > 0 and _check_has_different_zodiac()
+		if _drag_diff_zodiac:
+			var half_off = 14.0
+			var ds = 1.15
+			_draw_zodiac_at(Vector2(-half_off, 0), color, ds)
+			var left_count = int(stacked_zodiac_info[0].get("count", 1))
+			if left_count > 1:
+				_draw_side_badge(Vector2(-half_off - 6, -14), left_count)
+			if stacked_zodiac_info.size() > 1:
+				var info = stacked_zodiac_info[1]
+				var stk_owner = int(info.get("owner", 0))
+				var stk_zodiac = int(info.get("zodiac", 0))
+				var stk_color = PLAYER_COLORS[stk_owner % 4]
+				_draw_other_zodiac_at(Vector2(half_off, 0), stk_color, ds, stk_zodiac)
+				var right_count = int(info.get("count", 1))
+				if right_count > 1:
+					_draw_side_badge(Vector2(half_off + 6, -14), right_count)
+		else:
+			_draw_zodiac_at(Vector2.ZERO, color, 1.35)
+			if stack_count > 1:
+				_draw_stack_badges(1.2)
 		_draw_selection_ring(1.4, 0.7)
-		if stack_count > 1:
-			_draw_stack_badges(1.2)
 		return
 
 	# ─── HOME pieces in tray ───
@@ -214,7 +233,29 @@ func _draw() -> void:
 		var pulse = 1.0 + sin(bob_time * 5.0) * 0.08
 		piece_scale *= pulse
 
-	_draw_zodiac_at(Vector2.ZERO, color, piece_scale)
+	# Side-by-side display for team stacking with different animal types
+	var _has_different_zodiac_stack = stacked_zodiac_info.size() > 0 and _check_has_different_zodiac()
+	if _has_different_zodiac_stack:
+		# Draw each zodiac group side-by-side (lead left, teammate right)
+		var half_offset = 12.0 * piece_scale
+		var s = piece_scale * 0.85
+		# First group = lead piece zodiac (left)
+		_draw_zodiac_at(Vector2(-half_offset, 0), color, s)
+		var left_count = int(stacked_zodiac_info[0].get("count", 1))
+		if left_count > 1:
+			_draw_side_badge(Vector2(-half_offset - 6, -14) * piece_scale, left_count)
+		# Second group = teammate zodiac (right)
+		if stacked_zodiac_info.size() > 1:
+			var info = stacked_zodiac_info[1]
+			var stk_owner = int(info.get("owner", 0))
+			var stk_zodiac = int(info.get("zodiac", 0))
+			var stk_color = PLAYER_COLORS[stk_owner % 4]
+			_draw_other_zodiac_at(Vector2(half_offset, 0), stk_color, s, stk_zodiac)
+			var right_count = int(info.get("count", 1))
+			if right_count > 1:
+				_draw_side_badge(Vector2(half_offset + 6, -14) * piece_scale, right_count)
+	else:
+		_draw_zodiac_at(Vector2.ZERO, color, piece_scale)
 
 	if land_squash_time >= 0:
 		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
@@ -229,7 +270,7 @@ func _draw() -> void:
 		var glow_alpha = 0.4 + sin(bob_time * 2) * 0.3
 		_draw_selection_ring(1.0, glow_alpha)
 
-	if stack_count > 1:
+	if stack_count > 1 and not _has_different_zodiac_stack:
 		_draw_stack_badges(0.9)
 
 # ═══════════════════════════════════════════════════
@@ -295,6 +336,45 @@ func _draw_zodiac_at(pos: Vector2, color: Color, s: float, use_anim: bool = true
 	var offset = pos - draw_size * 0.5
 	draw_texture_rect(tex, Rect2(offset, draw_size), false, Color(1.0, 1.0, 1.0, alpha))
 
+func _check_has_different_zodiac() -> bool:
+	## Returns true if stacked pieces include more than one zodiac type
+	## stacked_zodiac_info is grouped: [{zodiac, owner, count}, ...]
+	return stacked_zodiac_info.size() > 1
+
+func _draw_other_zodiac_at(pos: Vector2, color: Color, s: float, z_index_override: int) -> void:
+	## Draw another zodiac animal (used for side-by-side team stacking)
+	var sprite_idx = z_index_override % ZODIAC_SPRITES.size()
+	var alpha = color.a
+	var frame_size := Vector2(ANIM_FRAME_W, ANIM_FRAME_H)
+	var draw_size = frame_size * s
+
+	var base_r = max(draw_size.x, draw_size.y) * 0.40
+	if alpha > 0.15:
+		draw_circle(pos + Vector2(1, 2) * s, base_r, Color(GBC_DARK, 0.2 * alpha))
+		draw_circle(pos, base_r, Color(color.r, color.g, color.b, 0.45 * alpha))
+		draw_arc(pos, base_r, 0, TAU, 16, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
+
+	if sprite_idx < ZODIAC_ANIM_SHEETS.size():
+		var sheet = ZODIAC_ANIM_SHEETS[sprite_idx]
+		if sheet != null:
+			var src_rect = Rect2(
+				anim_frame * ANIM_FRAME_W,
+				AnimState.IDLE * ANIM_FRAME_H,
+				ANIM_FRAME_W, ANIM_FRAME_H
+			)
+			var dst_rect = Rect2(pos - draw_size * 0.5, draw_size)
+			draw_texture_rect_region(sheet, dst_rect, src_rect, Color(1.0, 1.0, 1.0, alpha))
+			return
+
+	var tex = ZODIAC_SPRITES[sprite_idx]
+	if tex == null:
+		draw_circle(pos, 14 * s, color)
+		return
+	var tex_size = tex.get_size()
+	draw_size = tex_size * s
+	var offset = pos - draw_size * 0.5
+	draw_texture_rect(tex, Rect2(offset, draw_size), false, Color(1.0, 1.0, 1.0, alpha))
+
 func trigger_land_expression() -> void:
 	## Called when piece lands on the board — triggers squash + happy expression
 	land_squash_time = 0.0
@@ -332,6 +412,18 @@ func _draw_stack_badges(s: float) -> void:
 	var count_w = font.get_string_size(count_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 	draw_string(font, badge_pos + Vector2(-count_w * 0.5, 4), count_str,
 		HORIZONTAL_ALIGNMENT_LEFT, 12, 11, GBC_DARK)
+
+func _draw_side_badge(badge_pos: Vector2, count: int) -> void:
+	## Draw a small count badge at the given position (for side-by-side stacking)
+	if count <= 1:
+		return
+	draw_circle(badge_pos, 6, GBC_DARK)
+	draw_circle(badge_pos, 4.5, GBC_BRIGHT)
+	var font = ThemeDB.fallback_font
+	var count_str = str(count)
+	var count_w = font.get_string_size(count_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+	draw_string(font, badge_pos + Vector2(-count_w * 0.5, 3.5), count_str,
+		HORIZONTAL_ALIGNMENT_LEFT, 10, 10, GBC_DARK)
 
 # ═══════════════════════════════════════════════════
 # SETUP & ANIMATIONS (unchanged logic)
@@ -521,8 +613,9 @@ func set_selected(sel: bool) -> void:
 		position = base_position
 	queue_redraw()
 
-func set_stack(count: int) -> void:
+func set_stack(count: int, zodiac_info: Array = []) -> void:
 	stack_count = count
+	stacked_zodiac_info = zodiac_info
 	if count > 1:
 		animate_stack()
 	queue_redraw()

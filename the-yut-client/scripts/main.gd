@@ -32,7 +32,7 @@ func _on_state_updated() -> void:
 		"WaitingForPlayers":
 			if GameState.room_code != "":
 				_show_screen("waiting")
-		"Throwing", "SelectingPiece", "SelectingPath":
+		"DecidingOrder", "Throwing", "SelectingPiece", "SelectingPath":
 			_show_screen("game")
 		"GameOver":
 			pass  # handled by _on_game_over
