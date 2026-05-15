@@ -11,6 +11,7 @@ class DustPuff extends Node2D:
 	var lifetime := 0.35
 	var age := 0.0
 	var particles: Array = []
+	var _rc: int = 0
 
 	func _init(count: int = 5, spread: float = 20.0):
 		for i in range(count):
@@ -28,7 +29,10 @@ class DustPuff extends Node2D:
 		for p in particles:
 			p.pos += p.vel * delta
 			p.vel.y += 60 * delta
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var alpha = clampf(1.0 - age / lifetime, 0, 1)
@@ -42,6 +46,7 @@ class StarBurst extends Node2D:
 	var lifetime := 0.5
 	var age := 0.0
 	var rays: Array = []
+	var _rc: int = 0
 
 	func _init(ray_count: int = 8, max_radius: float = 60.0):
 		for i in range(ray_count):
@@ -60,7 +65,10 @@ class StarBurst extends Node2D:
 			return
 		for r in rays:
 			r.dist += r.speed * delta
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var alpha = clampf(1.0 - age / lifetime, 0, 1)
@@ -79,22 +87,26 @@ class ImpactRing extends Node2D:
 	var lifetime := 0.3
 	var age := 0.0
 	var max_radius := 40.0
+	var _rc: int = 0
 
 	func _process(delta: float) -> void:
 		age += delta
 		if age >= lifetime:
 			queue_free()
 			return
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var t = age / lifetime
 		var radius = max_radius * t
 		var alpha = 1.0 - t
 		var color = Color("E0C898", alpha)
-		draw_arc(Vector2.ZERO, radius, 0, TAU, 32, color, 3.0)
+		draw_arc(Vector2.ZERO, radius, 0, TAU, 12, color, 3.0)
 		if radius > 10:
-			draw_arc(Vector2.ZERO, radius * 0.6, 0, TAU, 24, Color("907040", alpha * 0.5), 2.0)
+			draw_arc(Vector2.ZERO, radius * 0.6, 0, TAU, 10, Color("907040", alpha * 0.5), 2.0)
 
 
 # ─── Speed Lines (piece moving fast) ───
@@ -103,6 +115,7 @@ class SpeedLines extends Node2D:
 	var age := 0.0
 	var direction := Vector2.LEFT
 	var lines: Array = []
+	var _rc: int = 0
 
 	func _init(dir: Vector2 = Vector2.LEFT, count: int = 5):
 		direction = dir.normalized()
@@ -117,7 +130,10 @@ class SpeedLines extends Node2D:
 		if age >= lifetime:
 			queue_free()
 			return
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var alpha = clampf(1.0 - age / lifetime, 0, 1)
@@ -133,6 +149,7 @@ class Sparkles extends Node2D:
 	var lifetime := 0.8
 	var age := 0.0
 	var sparks: Array = []
+	var _rc: int = 0
 
 	func _init(count: int = 10, spread: float = 40.0):
 		for i in range(count):
@@ -150,7 +167,10 @@ class Sparkles extends Node2D:
 		for s in sparks:
 			s.pos += s.vel * delta
 			s.vel.x *= 0.98
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var alpha = clampf(1.0 - age / lifetime, 0, 1)
@@ -167,19 +187,23 @@ class Sparkles extends Node2D:
 class MergePulse extends Node2D:
 	var lifetime := 0.25
 	var age := 0.0
+	var _rc: int = 0
 
 	func _process(delta: float) -> void:
 		age += delta
 		if age >= lifetime:
 			queue_free()
 			return
-		queue_redraw()
+		_rc += 1
+		if _rc >= 3:
+			_rc = 0
+			queue_redraw()
 
 	func _draw() -> void:
 		var t = age / lifetime
 		var radius = 10.0 + 25.0 * t
 		var alpha = 1.0 - t
-		draw_arc(Vector2.ZERO, radius, 0, TAU, 24, Color("E0C898", alpha), 2.0)
+		draw_arc(Vector2.ZERO, radius, 0, TAU, 12, Color("E0C898", alpha), 2.0)
 
 
 # ─── Spawn helpers (call from any node) ───

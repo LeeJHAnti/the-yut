@@ -28,20 +28,22 @@ const SFX_MAP: Dictionary = {
 	"path_choice":  preload("res://assets/audio/sfx/sfx_path_choice.wav"),
 }
 
-# ═══ BGM Preloads ═══
+# ═══ BGM Paths (lazy-loaded on demand) ═══
 # Title: 1 fixed track  |  In-game: 5 random tracks  |  Game Over: 1 fixed track
 # Style: 90s Japanese arcade fusion jazz × Korean traditional (gugak) arrangement
-const BGM_TRACKS: Dictionary = {
-	"title":    [preload("res://assets/audio/bgm/bgm_title.mp3")],
+# NOTE: NOT preloaded — these 7 MP3s total ~37MB. Loading on demand cuts startup time.
+const BGM_PATHS: Dictionary = {
+	"title":    ["res://assets/audio/bgm/bgm_title.mp3"],
 	"ingame":   [
-		preload("res://assets/audio/bgm/bgm_ingame_1.mp3"),
-		preload("res://assets/audio/bgm/bgm_ingame_2.mp3"),
-		preload("res://assets/audio/bgm/bgm_ingame_3.mp3"),
-		preload("res://assets/audio/bgm/bgm_ingame_4.mp3"),
-		preload("res://assets/audio/bgm/bgm_ingame_5.mp3"),
+		"res://assets/audio/bgm/bgm_ingame_1.mp3",
+		"res://assets/audio/bgm/bgm_ingame_2.mp3",
+		"res://assets/audio/bgm/bgm_ingame_3.mp3",
+		"res://assets/audio/bgm/bgm_ingame_4.mp3",
+		"res://assets/audio/bgm/bgm_ingame_5.mp3",
 	],
-	"gameover": [preload("res://assets/audio/bgm/bgm_gameover.mp3")],
+	"gameover": ["res://assets/audio/bgm/bgm_gameover.mp3"],
 }
+var _bgm_cache: Dictionary = {}  # path → AudioStream (loaded streams stay cached)
 
 # ═══ Audio Players ═══
 var bgm_player: AudioStreamPlayer
@@ -64,6 +66,7 @@ var slider_panel: Control  # volume slider container
 var volume_slider: HSlider
 var slider_visible: bool = false
 var _btn_anim_time: float = 0.0
+var _btn_redraw_counter: int = 0
 
 # ── Theme colors ──
 const COL_BG      = Color("503820")
@@ -95,7 +98,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_btn_anim_time += delta
-	if sound_btn:
+	# Throttle speaker icon redraw to ~10fps (pulse animation is subtle)
+	_btn_redraw_counter += 1
+	if _btn_redraw_counter >= 6 and sound_btn:
+		_btn_redraw_counter = 0
 		sound_btn.queue_redraw()
 
 # ═══════════════════════════════════════
@@ -329,10 +335,17 @@ func play_sfx(sfx_name: String) -> void:
 func play_bgm(track_name: String = "ingame") -> void:
 	if track_name == current_bgm and bgm_player.playing:
 		return
-	if track_name in BGM_TRACKS:
-		var tracks = BGM_TRACKS[track_name]
-		# Pick a random track from the array
-		var stream = tracks[randi() % tracks.size()]
+	if track_name in BGM_PATHS:
+		var paths = BGM_PATHS[track_name]
+		# Pick a random track path from the array
+		var path = paths[randi() % paths.size()]
+		# Lazy-load: only load the MP3 when first needed, then cache it
+		var stream: AudioStream
+		if _bgm_cache.has(path):
+			stream = _bgm_cache[path]
+		else:
+			stream = load(path)
+			_bgm_cache[path] = stream
 		bgm_player.stream = stream
 		# Enable infinite looping
 		if bgm_player.stream is AudioStreamMP3:

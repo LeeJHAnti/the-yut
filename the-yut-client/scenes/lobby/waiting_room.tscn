@@ -26,22 +26,22 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -220.0
-offset_top = -280.0
+offset_top = -310.0
 offset_right = 220.0
-offset_bottom = 280.0
+offset_bottom = 310.0
 theme_override_constants/separation = 10
 
 [node name="HeaderLabel" type="Label" parent="VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.314, 0.22, 0.125, 1)
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 28
 text = "WAITING ROOM"
 horizontal_alignment = 1
 
 [node name="RoomCodeLabel" type="Label" parent="VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.565, 0.439, 0.251, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 22
 text = "Room: ----"
 horizontal_alignment = 1
 
@@ -51,7 +51,7 @@ layout_mode = 2
 [node name="PlayersLabel" type="Label" parent="VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.314, 0.22, 0.125, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 text = "Players:"
 
 [node name="PlayerList" type="VBoxContainer" parent="VBox"]
@@ -59,26 +59,32 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 140)
 theme_override_constants/separation = 4
 
+[node name="HowToPlayBtn" type="Button" parent="VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+theme_override_font_sizes/font_size = 16
+text = "HOW TO PLAY"
+
 [node name="ChangeNameBtn" type="Button" parent="VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 42)
-theme_override_font_sizes/font_size = 16
+custom_minimum_size = Vector2(0, 40)
+theme_override_font_sizes/font_size = 15
 text = "CHANGE NAME"
 
 [node name="AddBotBtn" type="Button" parent="VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 42)
-theme_override_font_sizes/font_size = 16
+custom_minimum_size = Vector2(0, 40)
+theme_override_font_sizes/font_size = 15
 text = "ADD BOT"
 
 [node name="StartBtn" type="Button" parent="VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 50)
 theme_override_font_sizes/font_size = 20
-text = "> START GAME"
+text = "START GAME"
 
 [node name="LeaveBtn" type="Button" parent="VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 42)
-theme_override_font_sizes/font_size = 16
+custom_minimum_size = Vector2(0, 38)
+theme_override_font_sizes/font_size = 14
 text = "LEAVE"

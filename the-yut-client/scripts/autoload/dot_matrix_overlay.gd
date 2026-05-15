@@ -3,12 +3,19 @@ extends CanvasLayer
 ## Global dot-matrix LCD overlay.
 ## Applies a subtle Game Boy LCD texture across all scenes.
 ## No visible grid — just a faint pixel texture, noise, and vignette.
+## Performance: Disabled on mobile/web for better frame rates.
 
 var overlay_rect: ColorRect
 
 func _ready() -> void:
 	layer = 100
 	follow_viewport_enabled = false
+
+	# ─── Performance: Skip heavy shader on mobile/web ───
+	# The fullscreen shader with hash(), sin(), and screen_texture sampling
+	# drops mobile FPS significantly. Only enable on desktop.
+	if OS.has_feature("web") or OS.has_feature("mobile"):
+		return
 
 	overlay_rect = ColorRect.new()
 	overlay_rect.name = "DotMatrixRect"

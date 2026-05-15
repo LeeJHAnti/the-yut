@@ -106,6 +106,8 @@ func set_base_position(pos: Vector2) -> void:
 	position = pos
 
 func _process(delta: float) -> void:
+	var needs_redraw := false
+
 	# ─── Update animation state based on context ───
 	_update_anim_state()
 
@@ -115,7 +117,7 @@ func _process(delta: float) -> void:
 	if anim_time >= frame_duration:
 		anim_time -= frame_duration
 		anim_frame = (anim_frame + 1) % ANIM_FRAMES_PER_ROW
-		queue_redraw()
+		needs_redraw = true
 
 	# ─── Capture sad timer ───
 	if is_capture_sad:
@@ -127,7 +129,7 @@ func _process(delta: float) -> void:
 	# ─── Happy timer (timed expression after landing) ───
 	if happy_timer > 0:
 		happy_timer -= delta
-		queue_redraw()
+		needs_redraw = true
 
 	# Always advance bob_time for scale pulse / breathing effects
 	bob_time += delta * 4.0
@@ -136,14 +138,14 @@ func _process(delta: float) -> void:
 	if not is_animating and not is_dragging:
 		if is_selected:
 			position.y = base_position.y + sin(bob_time * 1.3) * 3.5
-			queue_redraw()
+			needs_redraw = true
 		elif is_completed_circuit:
-			queue_redraw()
+			needs_redraw = true
 		elif is_turn_bounce and is_home_display:
 			position.y = base_position.y + sin(bob_time) * 2.0
-			queue_redraw()
+			needs_redraw = true
 		elif happy_timer > 0:
-			queue_redraw()
+			needs_redraw = true
 		elif base_position != Vector2.ZERO:
 			position = base_position
 
@@ -152,7 +154,7 @@ func _process(delta: float) -> void:
 		land_squash_time += delta * 6.0
 		if land_squash_time > 1.0:
 			land_squash_time = -1.0
-		queue_redraw()
+		needs_redraw = true
 
 	# Ghost trail fade (always runs)
 	var i = ghost_trail.size() - 1
@@ -162,6 +164,10 @@ func _process(delta: float) -> void:
 			ghost_trail.remove_at(i)
 		i -= 1
 	if ghost_trail.size() > 0:
+		needs_redraw = true
+
+	# Single redraw call per frame instead of multiple
+	if needs_redraw:
 		queue_redraw()
 
 func _draw() -> void:
@@ -263,8 +269,8 @@ func _draw() -> void:
 	# Completed circuit indicator — pulsing gold ring (waiting to score)
 	if is_completed_circuit:
 		var pulse = 0.5 + sin(bob_time * 3.0) * 0.3
-		draw_arc(Vector2.ZERO, 24, 0, TAU, 24, Color("E0C898", pulse), 2.5)
-		draw_arc(Vector2.ZERO, 27, 0, TAU, 24, Color("907040", pulse * 0.5), 1.5)
+		draw_arc(Vector2.ZERO, 24, 0, TAU, 12, Color("E0C898", pulse), 2.5)
+		draw_arc(Vector2.ZERO, 27, 0, TAU, 12, Color("907040", pulse * 0.5), 1.5)
 
 	if is_selected:
 		var glow_alpha = 0.4 + sin(bob_time * 2) * 0.3
@@ -311,7 +317,7 @@ func _draw_zodiac_at(pos: Vector2, color: Color, s: float, use_anim: bool = true
 	if alpha > 0.15:
 		draw_circle(pos + Vector2(1, 2) * s, base_r, Color(GBC_DARK, 0.2 * alpha))
 		draw_circle(pos, base_r, Color(color.r, color.g, color.b, 0.45 * alpha))
-		draw_arc(pos, base_r, 0, TAU, 16, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
+		draw_arc(pos, base_r, 0, TAU, 12, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
 
 	# Try animated sprite sheet first
 	if use_anim and sprite_idx < ZODIAC_ANIM_SHEETS.size():
@@ -352,7 +358,7 @@ func _draw_other_zodiac_at(pos: Vector2, color: Color, s: float, z_index_overrid
 	if alpha > 0.15:
 		draw_circle(pos + Vector2(1, 2) * s, base_r, Color(GBC_DARK, 0.2 * alpha))
 		draw_circle(pos, base_r, Color(color.r, color.g, color.b, 0.45 * alpha))
-		draw_arc(pos, base_r, 0, TAU, 16, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
+		draw_arc(pos, base_r, 0, TAU, 12, Color(color.r, color.g, color.b, 0.7 * alpha), 1.5 * s)
 
 	if sprite_idx < ZODIAC_ANIM_SHEETS.size():
 		var sheet = ZODIAC_ANIM_SHEETS[sprite_idx]
@@ -387,7 +393,7 @@ func _draw_selection_ring(s: float, alpha: float) -> void:
 		var offset = -draw_size * 0.5
 		draw_texture_rect(TEX_SELECTION_RING, Rect2(offset, draw_size), false, Color(1, 1, 1, alpha))
 	else:
-		draw_arc(Vector2.ZERO, 20 * s, 0, TAU, 16, Color(GBC_BRIGHT, alpha), 2.5)
+		draw_arc(Vector2.ZERO, 20 * s, 0, TAU, 12, Color(GBC_BRIGHT, alpha), 2.5)
 
 ## All individual _draw_*() animal functions have been replaced by sprite textures.
 ## Sprites are loaded from res://assets/sprites/piece_*.png

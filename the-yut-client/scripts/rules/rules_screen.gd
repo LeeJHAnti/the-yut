@@ -24,6 +24,7 @@ var current_page: int = 0
 var total_pages: int = 6
 var font: Font
 var anim_time: float = 0.0
+var _redraw_counter: int = 0
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
@@ -31,7 +32,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	anim_time += delta
-	queue_redraw()
+	# Throttle redraws to ~15fps — rules screen has 800+ draw calls
+	_redraw_counter += 1
+	if _redraw_counter >= 4:
+		_redraw_counter = 0
+		queue_redraw()
 
 func _draw() -> void:
 	# Full screen background
@@ -89,15 +94,18 @@ func _input(event: InputEvent) -> void:
 			if current_page > 0:
 				current_page -= 1
 				AudioManager.play_sfx("ui_click")
+				queue_redraw()  # immediate redraw on page change
 		elif x > 390:
 			if current_page < total_pages - 1:
 				current_page += 1
 				AudioManager.play_sfx("ui_click")
+				queue_redraw()
 		else:
 			# Tap center to advance
 			if current_page < total_pages - 1:
 				current_page += 1
 				AudioManager.play_sfx("ui_click")
+				queue_redraw()
 			else:
 				_close()
 

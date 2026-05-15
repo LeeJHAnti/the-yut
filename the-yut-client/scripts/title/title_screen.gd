@@ -1,6 +1,6 @@
 extends Control
 
-## Title screen — matches title_screen.tscn layout
+## Title screen — matches title_screen.tscn layout (redesigned for international players)
 
 @onready var name_input: LineEdit = $VBox/NameInput
 @onready var quick_start_btn: Button = $VBox/QuickStartBtn
@@ -10,7 +10,7 @@ extends Control
 @onready var status_label: Label = $VBox/StatusLabel
 @onready var room_list_panel: VBoxContainer = $VBox/RoomListPanel
 @onready var http_request: HTTPRequest = $HTTPRequest
-@onready var info_button: Button = $InfoButton
+@onready var how_to_play_btn: Button = $VBox/HowToPlayBtn
 
 # Decoration sprites
 const TEX_DECO_FLOWER = preload("res://assets/sprites/deco_flower.png")
@@ -18,24 +18,17 @@ const TEX_DECO_PAW = preload("res://assets/sprites/deco_paw.png")
 const TEX_DECO_STAR = preload("res://assets/sprites/deco_star.png")
 const TEX_DECO_GRASS = preload("res://assets/sprites/deco_grass.png")
 
-# Cute animal sprites for title decoration
-const ZODIAC_SPRITES: Array = [
-	preload("res://assets/sprites/piece_rat.png"),
-	preload("res://assets/sprites/piece_ox.png"),
-	preload("res://assets/sprites/piece_tiger.png"),
-	preload("res://assets/sprites/piece_rabbit.png"),
-	preload("res://assets/sprites/piece_dragon.png"),
-	preload("res://assets/sprites/piece_snake.png"),
-	preload("res://assets/sprites/piece_horse.png"),
-	preload("res://assets/sprites/piece_sheep.png"),
-	preload("res://assets/sprites/piece_monkey.png"),
-	preload("res://assets/sprites/piece_rooster.png"),
-	preload("res://assets/sprites/piece_dog.png"),
-	preload("res://assets/sprites/piece_pig.png"),
+# Only preload the 4 animals actually shown in title decoration (not all 12)
+const TITLE_ANIMAL_SPRITES: Array = [
+	preload("res://assets/sprites/piece_rabbit.png"),   # index 0
+	preload("res://assets/sprites/piece_dragon.png"),   # index 1
+	preload("res://assets/sprites/piece_monkey.png"),   # index 2
+	preload("res://assets/sprites/piece_pig.png"),      # index 3
 ]
 
 var join_mode: bool = false
 var deco_time: float = 0.0
+var _redraw_counter: int = 0
 
 func _ready() -> void:
 	AudioManager.play_bgm("title")
@@ -49,26 +42,30 @@ func _ready() -> void:
 	join_room_btn.pressed.connect(_on_join_room)
 	name_input.text_changed.connect(_on_name_changed)
 	http_request.request_completed.connect(_on_room_list_received)
-	info_button.pressed.connect(_on_info_pressed)
+	how_to_play_btn.pressed.connect(_on_how_to_play)
 
-	# Style info button as a pixel circle with "i"
-	var info_style = StyleBoxFlat.new()
-	info_style.bg_color = Color("E8D8B0")
-	info_style.border_color = Color("503820")
-	info_style.set_border_width_all(2)
-	info_style.set_corner_radius_all(25)
-	info_style.content_margin_left = 0
-	info_style.content_margin_right = 0
-	info_style.content_margin_top = 0
-	info_style.content_margin_bottom = 2
-	info_button.add_theme_stylebox_override("normal", info_style)
-	var info_hover = info_style.duplicate()
-	info_hover.bg_color = Color("F8F0D8")
-	info_button.add_theme_stylebox_override("hover", info_hover)
-	var info_pressed = info_style.duplicate()
-	info_pressed.bg_color = Color("D4B888")
-	info_button.add_theme_stylebox_override("pressed", info_pressed)
-	info_button.add_theme_color_override("font_color", Color("503820"))
+	# ── Style "HOW TO PLAY" button — distinctive green accent ──
+	var htp_style = StyleBoxFlat.new()
+	htp_style.bg_color = Color("58B068", 0.25)
+	htp_style.border_color = Color("58B068")
+	htp_style.set_border_width_all(3)
+	htp_style.set_corner_radius_all(6)
+	htp_style.content_margin_left = 12
+	htp_style.content_margin_right = 12
+	htp_style.content_margin_top = 8
+	htp_style.content_margin_bottom = 10
+	htp_style.shadow_color = Color(0, 0, 0, 0.12)
+	htp_style.shadow_size = 3
+	how_to_play_btn.add_theme_stylebox_override("normal", htp_style)
+	how_to_play_btn.add_theme_color_override("font_color", Color("3A7A42"))
+
+	var htp_hover = htp_style.duplicate()
+	htp_hover.bg_color = Color("58B068", 0.40)
+	how_to_play_btn.add_theme_stylebox_override("hover", htp_hover)
+
+	var htp_pressed = htp_style.duplicate()
+	htp_pressed.bg_color = Color("58B068", 0.55)
+	how_to_play_btn.add_theme_stylebox_override("pressed", htp_pressed)
 
 	NetworkManager.connected.connect(_on_connected)
 	NetworkManager.disconnected.connect(_on_disconnected)
@@ -90,6 +87,12 @@ func _set_buttons_enabled(enabled: bool) -> void:
 
 func _on_name_changed(new_text: String) -> void:
 	GameState.player_name = new_text
+
+func _on_how_to_play() -> void:
+	AudioManager.play_sfx("ui_click")
+	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
+	var rules = rules_scene.instantiate()
+	add_child(rules)
 
 func _on_quick_start() -> void:
 	AudioManager.play_sfx("ui_click")
@@ -132,11 +135,8 @@ func _on_join_room() -> void:
 	NetworkManager.send_message({"type": "join_room", "payload": {"code": code}})
 
 func _fetch_room_list() -> void:
-	# Build the HTTP URL from the server URL
 	var server_url = NetworkManager.server_url
-	# Convert ws:// → http://, wss:// → https://
 	var http_url = server_url.replace("wss://", "https://").replace("ws://", "http://")
-	# Remove /ws path suffix
 	if http_url.ends_with("/ws"):
 		http_url = http_url.left(http_url.length() - 3)
 	http_url += "/admin/rooms"
@@ -160,14 +160,12 @@ func _on_room_list_received(result: int, response_code: int, _headers: PackedStr
 		return
 
 	var rooms = json["rooms"] as Array
-	# Filter: only show rooms in WaitingForPlayers phase
 	var waiting_rooms: Array = []
 	for room in rooms:
 		var phase = room.get("phase", "")
 		if phase == "WaitingForPlayers":
 			waiting_rooms.append(room)
 
-	# Clear old entries
 	for child in room_list_panel.get_children():
 		child.queue_free()
 
@@ -198,7 +196,6 @@ func _on_room_list_received(result: int, response_code: int, _headers: PackedStr
 		btn.pressed.connect(func(): _join_room_by_code(room_code))
 		room_list_panel.add_child(btn)
 
-	# Refresh button
 	var refresh_btn = Button.new()
 	refresh_btn.text = "REFRESH"
 	refresh_btn.add_theme_font_size_override("font_size", 13)
@@ -218,24 +215,19 @@ func _join_room_by_code(code: String) -> void:
 	_send_name()
 	NetworkManager.send_message({"type": "join_room", "payload": {"code": code}})
 
-func _on_info_pressed() -> void:
-	AudioManager.play_sfx("ui_click")
-	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
-	var rules = rules_scene.instantiate()
-	add_child(rules)
-
 func _send_name() -> void:
 	NetworkManager.send_message({
 		"type": "change_name",
 		"payload": {"name": GameState.player_name}
 	})
 
-## _ensure_connected() 제거됨 — 각 호출부에서 직접 연결 상태를 체크하도록 변경
-## 이유: 이미 연결된 경우 signal을 emit하지 않아 await가 영원히 해제되지 않는 버그 수정
-
 func _process(delta: float) -> void:
 	deco_time += delta
-	queue_redraw()
+	# Throttle decoration redraws to ~15fps
+	_redraw_counter += 1
+	if _redraw_counter >= 4:
+		_redraw_counter = 0
+		queue_redraw()
 
 func _draw() -> void:
 	_draw_decorations()
@@ -282,13 +274,12 @@ func _draw_decorations() -> void:
 
 	# 4 showcase zodiac animals near bottom corners
 	var animal_scale = 1.5
-	var animal_indices = [3, 4, 8, 11]  # rabbit, dragon, monkey, pig
 	var animal_positions = [
 		Vector2(50, h - 40), Vector2(130, h - 35),
 		Vector2(w - 140, h - 35), Vector2(w - 55, h - 40),
 	]
 	for i in range(4):
-		var tex = ZODIAC_SPRITES[animal_indices[i]]
+		var tex = TITLE_ANIMAL_SPRITES[i]
 		var ts = tex.get_size()
 		var bob = sin(deco_time * 1.5 + i * 1.7) * 4.0
 		var pos = animal_positions[i] - ts * animal_scale * 0.5 + Vector2(0, bob)

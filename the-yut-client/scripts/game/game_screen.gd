@@ -24,6 +24,7 @@ const ParticleEffects = preload("res://scripts/game/particle_effects.gd")
 @onready var action_popup: PanelContainer = $ActionPopup
 @onready var action_label: Label = $ActionPopup/ActionLabel
 @onready var path_choice_panel: Control = $PathChoicePanel
+@onready var help_button: Button = $HelpButton
 
 var piece_nodes: Dictionary = {}
 var pieces_container: Node2D
@@ -78,6 +79,23 @@ func _ready() -> void:
 
 	_hide_all_actions()
 	path_choice_panel.visible = false
+
+	# ─── Style in-game help "?" button ───
+	help_button.pressed.connect(_on_help_pressed)
+	var help_style = StyleBoxFlat.new()
+	help_style.bg_color = Color("E8D8B0", 0.8)
+	help_style.border_color = Color("907040")
+	help_style.set_border_width_all(2)
+	help_style.set_corner_radius_all(15)
+	help_style.content_margin_left = 0
+	help_style.content_margin_right = 0
+	help_style.content_margin_top = 0
+	help_style.content_margin_bottom = 2
+	help_button.add_theme_stylebox_override("normal", help_style)
+	help_button.add_theme_color_override("font_color", Color("503820"))
+	var help_hover = help_style.duplicate()
+	help_hover.bg_color = Color("F8F0D8")
+	help_button.add_theme_stylebox_override("hover", help_hover)
 
 	# ─── Style action popup (Nintendo RPG notification banner) ───
 	var popup_style = StyleBoxFlat.new()
@@ -276,15 +294,16 @@ func _refresh_marquee() -> void:
 
 	if is_me:
 		var marquee = "YOUR TURN"
-		if GameState.pending_results.size() > 0:
-			marquee += "  [" + ", ".join(GameState.pending_results) + "]"
+		# Show inline result only when 1 pending (HUD handles 2+)
+		if GameState.pending_results.size() == 1:
+			marquee += "  [" + GameState.pending_results[0] + "]"
 		turn_marquee.text = marquee
 	else:
 		var is_ally = GameState.is_team_mode() and GameState.are_teammates(GameState.player_id, current)
 		var prefix = "ALLY " if is_ally else ""
 		var marquee = prefix + pname + "'s Turn"
-		if GameState.pending_results.size() > 0:
-			marquee += "  [" + ", ".join(GameState.pending_results) + "]"
+		if GameState.pending_results.size() == 1:
+			marquee += "  [" + GameState.pending_results[0] + "]"
 		turn_marquee.text = marquee
 
 func _update_board_tray() -> void:
@@ -680,6 +699,12 @@ func _on_finish_confirm_no() -> void:
 	else:
 		_set_action("")
 
+func _on_help_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
+	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
+	var rules = rules_scene.instantiate()
+	add_child(rules)
+
 func _on_path_chosen(choice: String) -> void:
 	AudioManager.play_sfx("ui_click")
 	path_choice_panel.visible = false
@@ -744,7 +769,7 @@ func _on_server_message(data: Dictionary) -> void:
 						var pid = int(pd.get("id", -1))
 						if pid != piece_id and int(pd.get("owner", -1)) == moving_owner \
 								and pd.get("status", "") == "OnBoard" \
-								and int(pd.get("node_id", -1)) == new_node:
+								and int(pd.get("node", -1)) == new_node:
 							AudioManager.play_sfx("piece_stack")
 							break
 			_animate_piece_move(piece_id, new_node, captured, finished)
@@ -887,7 +912,7 @@ func _sync_pieces() -> void:
 				if zk != lead_zodiac:
 					zodiac_info.append(zodiac_counts[zk])
 		piece_node.set_stack(1 + stacked.size(), zodiac_info)
-		piece_node.queue_redraw()
+		# queue_redraw() removed — piece_controller handles its own redraws via needs_redraw flag
 
 func _create_piece_node(piece_id: int, owner_id: int) -> void:
 	var piece_script = load("res://scripts/game/piece_controller.gd")

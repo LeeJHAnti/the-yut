@@ -18,14 +18,15 @@ func _process(delta: float) -> void:
 			Engine.time_scale = 1.0
 		return
 
-	# Camera shake with decay
+	# Camera shake with decay — use deterministic sin/cos instead of random
 	if shake_timer > 0:
 		shake_timer -= delta
 		var t = shake_timer / shake_decay
 		var current_intensity = shake_intensity * t
+		var phase = shake_timer * 45.0  # fast oscillation
 		offset = Vector2(
-			randf_range(-current_intensity, current_intensity),
-			randf_range(-current_intensity, current_intensity)
+			sin(phase) * current_intensity,
+			cos(phase * 1.3) * current_intensity
 		)
 		if shake_timer <= 0:
 			offset = Vector2.ZERO

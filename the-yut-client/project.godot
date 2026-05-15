@@ -35,7 +35,14 @@ window/handheld/orientation=1
 
 theme/default_font="res://assets/fonts/pixel_font.tres"
 
+[physics]
+
+#Reducephysicstickrate(gamedoesn'tneedphysics)common/physics_ticks_per_second=30
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+"#âââPerformanceoptimizationsâââ#Enable2Dbatchingforfewerdrawcallsbatching/use_batching"=true
+#LimitphysicsticksforlighterCPUusageenvironment/defaults/default_clear_color=Color(1, 0.973, 0.91, 1)

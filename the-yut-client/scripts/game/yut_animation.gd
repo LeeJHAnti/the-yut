@@ -143,11 +143,11 @@ func _draw_result_popup() -> void:
 			var p2 = Vector2(cos(angle) * outer_r, sin(angle) * outer_r)
 			draw_line(p1, p2, Color("E0C898", result_glow * 0.5), 2.5)
 		# Outer glow ring
-		draw_arc(Vector2.ZERO, 58 + result_glow * 8, 0, TAU, 32,
+		draw_arc(Vector2.ZERO, 58 + result_glow * 8, 0, TAU, 16,
 			Color("E0C898", result_glow * 0.35), 3.0)
 
-	# ─── RPG-style beveled panel ───
-	_draw_rpg_panel(Vector2.ZERO, 136, 86)
+	# ─── RPG-style beveled panel (wider for English labels) ───
+	_draw_rpg_panel(Vector2.ZERO, 170, 90)
 
 	# Korean result text sprite (pre-rendered pixel art)
 	var result_tex = RESULT_TEXTURES.get(result_text, null)
@@ -165,12 +165,12 @@ func _draw_result_popup() -> void:
 		draw_string(font, Vector2(-text_w * 0.5, 6), result_text,
 			HORIZONTAL_ALIGNMENT_LEFT, 120, 28, Color("503820"))
 
-	# Distance label centered under the result
-	var dist_text = _get_distance_label(result_text)
-	if dist_text != "":
-		var dist_w = font.get_string_size(dist_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-		draw_string(font, Vector2(-dist_w * 0.5, 30), dist_text,
-			HORIZONTAL_ALIGNMENT_LEFT, 50, 12, Color("907040"))
+	# English name + step count label (for international players)
+	var eng_label = _get_english_label(result_text)
+	if eng_label != "":
+		var eng_w = font.get_string_size(eng_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		draw_string(font, Vector2(-eng_w * 0.5, 30), eng_label,
+			HORIZONTAL_ALIGNMENT_LEFT, 120, 14, Color("6B4C30"))
 
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
@@ -216,6 +216,17 @@ func _get_distance_label(result: String) -> String:
 		"Yut": return "+4"
 		"Mo": return "+5"
 		"BackDo": return "-1"
+	return ""
+
+func _get_english_label(result: String) -> String:
+	## Returns a clear English label with move distance for international players
+	match result:
+		"Do": return "Do  +1 step"
+		"Gae": return "Gae  +2 steps"
+		"Geol": return "Geol  +3 steps"
+		"Yut": return "Yut  +4 steps"
+		"Mo": return "Mo  +5 steps"
+		"BackDo": return "Back  -1 step"
 	return ""
 
 func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:

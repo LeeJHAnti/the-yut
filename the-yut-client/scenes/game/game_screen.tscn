@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://game"]
+[gd_scene load_steps=8 format=3 uid="uid://game"]
 
 [ext_resource type="Script" path="res://scripts/game/game_screen.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/game/board_controller.gd" id="2"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/game/yut_animation.gd" id="4"]
 [ext_resource type="Script" path="res://scripts/game/screen_effects.gd" id="5"]
 [ext_resource type="Theme" path="res://assets/dmg_theme.tres" id="6"]
+[ext_resource type="Script" path="res://scripts/game/action_stack_hud.gd" id="7"]
 
 [node name="GameScreen" type="Control"]
 layout_mode = 3
@@ -33,6 +34,15 @@ theme_override_font_sizes/font_size = 16
 text = ">> YOUR TURN <<"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="ActionStackHUD" type="Control" parent="."]
+layout_mode = 1
+offset_left = 0.0
+offset_top = 34.0
+offset_right = 520.0
+offset_bottom = 60.0
+mouse_filter = 2
+script = ExtResource("7")
 
 [node name="Board" type="Node2D" parent="."]
 script = ExtResource("2")
@@ -102,3 +112,12 @@ horizontal_alignment = 1
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 12
+
+[node name="HelpButton" type="Button" parent="."]
+layout_mode = 1
+offset_left = 470.0
+offset_top = 2.0
+offset_right = 516.0
+offset_bottom = 32.0
+theme_override_font_sizes/font_size = 16
+text = "?"

@@ -4,6 +4,7 @@ extends Control
 
 @onready var winner_label: Label = $VBox/WinnerLabel
 @onready var play_again_btn: Button = $VBox/PlayAgainBtn
+@onready var how_to_play_btn: Button = $VBox/HowToPlayBtn
 @onready var exit_btn: Button = $VBox/LobbyBtn
 
 # Decoration sprites
@@ -11,17 +12,10 @@ const TEX_DECO_FLOWER = preload("res://assets/sprites/deco_flower.png")
 const TEX_DECO_STAR = preload("res://assets/sprites/deco_star.png")
 const TEX_DECO_PAW = preload("res://assets/sprites/deco_paw.png")
 
-const ZODIAC_SPRITES: Array = [
-	preload("res://assets/sprites/piece_rat.png"),
-	preload("res://assets/sprites/piece_ox.png"),
-	preload("res://assets/sprites/piece_tiger.png"),
+# Only 4 confetti animals (not all 12) to reduce preload overhead
+const CONFETTI_SPRITES: Array = [
 	preload("res://assets/sprites/piece_rabbit.png"),
-	preload("res://assets/sprites/piece_dragon.png"),
-	preload("res://assets/sprites/piece_snake.png"),
-	preload("res://assets/sprites/piece_horse.png"),
-	preload("res://assets/sprites/piece_sheep.png"),
-	preload("res://assets/sprites/piece_monkey.png"),
-	preload("res://assets/sprites/piece_rooster.png"),
+	preload("res://assets/sprites/piece_tiger.png"),
 	preload("res://assets/sprites/piece_dog.png"),
 	preload("res://assets/sprites/piece_pig.png"),
 ]
@@ -29,11 +23,29 @@ const ZODIAC_SPRITES: Array = [
 var sparkle_timer: float = 0.0
 var deco_time: float = 0.0
 var confetti_animals: Array = []  # celebration animals
+var _redraw_counter: int = 0
 
 func _ready() -> void:
 	play_again_btn.pressed.connect(_on_play_again)
+	how_to_play_btn.pressed.connect(_on_how_to_play)
 	exit_btn.pressed.connect(_on_exit)
 	GameState.game_over_signal.connect(_on_game_over)
+
+	# ── Style HOW TO PLAY button — green accent ──
+	var htp_style = StyleBoxFlat.new()
+	htp_style.bg_color = Color("58B068", 0.20)
+	htp_style.border_color = Color("58B068")
+	htp_style.set_border_width_all(2)
+	htp_style.set_corner_radius_all(5)
+	htp_style.content_margin_left = 12
+	htp_style.content_margin_right = 12
+	htp_style.content_margin_top = 6
+	htp_style.content_margin_bottom = 8
+	how_to_play_btn.add_theme_stylebox_override("normal", htp_style)
+	how_to_play_btn.add_theme_color_override("font_color", Color("3A7A42"))
+	var htp_hover = htp_style.duplicate()
+	htp_hover.bg_color = Color("58B068", 0.35)
+	how_to_play_btn.add_theme_stylebox_override("hover", htp_hover)
 
 func _on_game_over(winner_id: int, winner_name: String) -> void:
 	var is_my_win = (winner_id == GameState.player_id)
@@ -68,7 +80,7 @@ func _on_game_over(winner_id: int, winner_name: String) -> void:
 	confetti_animals.clear()
 	for i in range(6):
 		confetti_animals.append({
-			"idx": randi() % 12,
+			"idx": randi() % CONFETTI_SPRITES.size(),
 			"x": randf_range(30, size.x - 30),
 			"y": randf_range(-80, -20),
 			"speed": randf_range(60, 140),
@@ -83,8 +95,12 @@ func _process(delta: float) -> void:
 		if a["y"] > size.y + 60:
 			a["y"] = randf_range(-80, -20)
 			a["x"] = randf_range(30, size.x - 30)
-			a["idx"] = randi() % 12
-	queue_redraw()
+			a["idx"] = randi() % CONFETTI_SPRITES.size()
+	# Throttle redraws to ~20fps
+	_redraw_counter += 1
+	if _redraw_counter >= 3:
+		_redraw_counter = 0
+		queue_redraw()
 
 func _draw() -> void:
 	var w = size.x
@@ -121,11 +137,17 @@ func _draw() -> void:
 
 	# Confetti falling animals
 	for a in confetti_animals:
-		var tex = ZODIAC_SPRITES[a["idx"]]
+		var tex = CONFETTI_SPRITES[a["idx"]]
 		var ts = tex.get_size()
 		var wobble_x = sin(deco_time * 2.0 + a["wobble_phase"]) * 15.0
 		var pos = Vector2(a["x"] + wobble_x, a["y"]) - ts * 0.75
 		draw_texture_rect(tex, Rect2(pos, ts * 1.5), false, Color(1, 1, 1, 0.6))
+
+func _on_how_to_play() -> void:
+	AudioManager.play_sfx("ui_click")
+	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
+	var rules = rules_scene.instantiate()
+	add_child(rules)
 
 func _on_play_again() -> void:
 	AudioManager.play_sfx("ui_click")

@@ -10,12 +10,17 @@ use crate::messages::{ClientMessage, ServerMessage};
 use crate::room::{RoomMap, RoomManager};
 use crate::game::state::{GamePhase, MoveResult};
 
-/// Delay (ms) after a yut throw — must be longer than the client animation.
+/// Delay (ms) before a bot throws yut — must be longer than the client animation
+/// to give players time to see the board state change before the next throw.
 /// Client yut animation takes ~1.7s (normal) / ~2.4s (extra turn).
-const BOT_THROW_DELAY_MS: u64 = 2000;
-const BOT_EXTRA_THROW_DELAY_MS: u64 = 2800;
+const BOT_THROW_DELAY_MS: u64 = 2500;
+const BOT_EXTRA_THROW_DELAY_MS: u64 = 3200;
 /// Delay (ms) after piece selection / path selection (no yut animation playing).
-const BOT_ACTION_DELAY_MS: u64 = 1200;
+/// Gives players time to see the bot's piece move before the next action.
+const BOT_ACTION_DELAY_MS: u64 = 1800;
+/// Delay (ms) when bot's turn first starts (transition from human → bot).
+/// Slightly longer so the player can process the turn change.
+const BOT_TURN_START_DELAY_MS: u64 = 2200;
 
 struct WsClient {
     player_id: Option<usize>,
@@ -499,7 +504,7 @@ async fn handle_throw_yut(client: &mut WsClient, rooms: &RoomMap) {
                                 let rooms_clone = rooms.clone();
                                 let code_clone = room_code.clone();
                                 drop(room);
-                                schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
+                                schedule_bot_turn(rooms_clone, code_clone, BOT_TURN_START_DELAY_MS);
                                 return;
                             }
                         }
@@ -615,7 +620,8 @@ async fn handle_select_piece(client: &mut WsClient, rooms: &RoomMap, piece_id: u
                 check_needs_bot_turn(&room)
             };
             if needs_bot {
-                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_ACTION_DELAY_MS);
+                // Human just moved → bot's turn starts: use longer initial delay
+                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_TURN_START_DELAY_MS);
             }
         }
     }
@@ -635,7 +641,8 @@ async fn handle_select_path(client: &mut WsClient, rooms: &RoomMap, choice: &str
                 check_needs_bot_turn(&room)
             };
             if needs_bot {
-                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_ACTION_DELAY_MS);
+                // Human chose path → bot's turn starts: use longer initial delay
+                schedule_bot_turn(rooms.clone(), room_code.clone(), BOT_TURN_START_DELAY_MS);
             }
         }
     }

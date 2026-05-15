@@ -9,6 +9,7 @@ extends Control
 @onready var leave_btn: Button = $VBox/LeaveBtn
 @onready var change_name_btn: Button = $VBox/ChangeNameBtn
 @onready var add_bot_btn: Button = $VBox/AddBotBtn
+@onready var how_to_play_btn: Button = $VBox/HowToPlayBtn
 
 # Decoration sprites
 const TEX_DECO_FLOWER = preload("res://assets/sprites/deco_flower.png")
@@ -16,17 +17,10 @@ const TEX_DECO_PAW = preload("res://assets/sprites/deco_paw.png")
 const TEX_DECO_STAR = preload("res://assets/sprites/deco_star.png")
 const TEX_DECO_GRASS = preload("res://assets/sprites/deco_grass.png")
 
-const ZODIAC_SPRITES: Array = [
-	preload("res://assets/sprites/piece_rat.png"),
-	preload("res://assets/sprites/piece_ox.png"),
-	preload("res://assets/sprites/piece_tiger.png"),
+# Only 4 animals for waiting room display (not all 12) to reduce preload overhead
+const LOBBY_ANIMAL_SPRITES: Array = [
 	preload("res://assets/sprites/piece_rabbit.png"),
-	preload("res://assets/sprites/piece_dragon.png"),
-	preload("res://assets/sprites/piece_snake.png"),
-	preload("res://assets/sprites/piece_horse.png"),
-	preload("res://assets/sprites/piece_sheep.png"),
-	preload("res://assets/sprites/piece_monkey.png"),
-	preload("res://assets/sprites/piece_rooster.png"),
+	preload("res://assets/sprites/piece_tiger.png"),
 	preload("res://assets/sprites/piece_dog.png"),
 	preload("res://assets/sprites/piece_pig.png"),
 ]
@@ -34,12 +28,30 @@ const ZODIAC_SPRITES: Array = [
 var is_editing_name: bool = false
 var name_edit: LineEdit = null
 var deco_time: float = 0.0
+var _redraw_counter: int = 0
 
 func _ready() -> void:
 	start_btn.pressed.connect(_on_start)
 	leave_btn.pressed.connect(_on_leave)
 	change_name_btn.pressed.connect(_on_change_name)
 	add_bot_btn.pressed.connect(_on_add_bot)
+	how_to_play_btn.pressed.connect(_on_how_to_play)
+
+	# ── Style HOW TO PLAY button — green accent ──
+	var htp_style = StyleBoxFlat.new()
+	htp_style.bg_color = Color("58B068", 0.20)
+	htp_style.border_color = Color("58B068")
+	htp_style.set_border_width_all(2)
+	htp_style.set_corner_radius_all(5)
+	htp_style.content_margin_left = 12
+	htp_style.content_margin_right = 12
+	htp_style.content_margin_top = 6
+	htp_style.content_margin_bottom = 8
+	how_to_play_btn.add_theme_stylebox_override("normal", htp_style)
+	how_to_play_btn.add_theme_color_override("font_color", Color("3A7A42"))
+	var htp_hover = htp_style.duplicate()
+	htp_hover.bg_color = Color("58B068", 0.35)
+	how_to_play_btn.add_theme_stylebox_override("hover", htp_hover)
 
 	GameState.state_updated.connect(_update_ui)
 
@@ -157,7 +169,11 @@ func _submit_name_change() -> void:
 
 func _process(delta: float) -> void:
 	deco_time += delta
-	queue_redraw()
+	# Throttle decoration redraws to ~15fps
+	_redraw_counter += 1
+	if _redraw_counter >= 4:
+		_redraw_counter = 0
+		queue_redraw()
 
 func _draw() -> void:
 	var w = size.x
@@ -186,8 +202,7 @@ func _draw() -> void:
 	# Waiting animal (animated idle bounce) — show one animal per player slot
 	var num_players = GameState.players.size()
 	for i in range(mini(num_players, 4)):
-		var animal_idx = (hash(i) * 7 + 3) % 12
-		var tex = ZODIAC_SPRITES[animal_idx]
+		var tex = LOBBY_ANIMAL_SPRITES[i % LOBBY_ANIMAL_SPRITES.size()]
 		var ts = tex.get_size()
 		var ax = 35 + i * 25
 		var ay = 160 + i * 85
@@ -202,6 +217,12 @@ func _draw() -> void:
 			var sy = 25 + sin(i * 1.8) * 15
 			var twinkle = 0.15 + sin(deco_time * 2.5 + i * 2.0) * 0.15
 			draw_texture(TEX_DECO_STAR, Vector2(sx, sy) - ss * 0.5, Color(1, 1, 1, twinkle))
+
+func _on_how_to_play() -> void:
+	AudioManager.play_sfx("ui_click")
+	var rules_scene = preload("res://scenes/rules/rules_screen.tscn")
+	var rules = rules_scene.instantiate()
+	add_child(rules)
 
 func _on_add_bot() -> void:
 	NetworkManager.send_message({

@@ -126,12 +126,16 @@ var GRAPH: Dictionary = {}
 var REVERSE_GRAPH: Dictionary = {}  # for backward movement (BackDo)
 
 func _ready() -> void:
+	_is_mobile = OS.has_feature("web") or OS.has_feature("mobile")
 	_build_graph()
 
 func _process(_delta: float) -> void:
-	# Continuously redraw for turn marker pulse animation
+	# Throttle pulse animation redraws to ~15fps (every 4th frame)
 	if current_turn_player_idx >= 0:
-		queue_redraw()
+		_redraw_counter += 1
+		if _redraw_counter >= REDRAW_SKIP:
+			_redraw_counter = 0
+			queue_redraw()
 
 func _build_graph() -> void:
 	GRAPH.clear()
@@ -294,6 +298,11 @@ const SMALL_RADIUS := 13.0   # small node radius
 
 var current_turn_player_idx: int = -1  # which player index has current turn (for bounce)
 
+# ─── Performance: throttle decorative redraws ───
+var _redraw_counter: int = 0
+const REDRAW_SKIP: int = 3  # redraw every 4th frame (~15fps) for pulse animations
+var _is_mobile: bool = false  # set in _ready, used to reduce decorations
+
 func _draw() -> void:
 	_draw_turn_marquee()
 	_draw_board_bg()
@@ -342,8 +351,8 @@ func _draw_board_bg() -> void:
 	var by := 36.0
 	var bh := 530.0
 
-	# Tiling background pattern
-	if TEX_BOARD_BG:
+	# Tiling background pattern — skip on mobile (many draw_texture calls)
+	if TEX_BOARD_BG and not _is_mobile:
 		var tile_size = TEX_BOARD_BG.get_size()
 		var tile_color = Color(1, 1, 1, 0.15)  # subtle overlay
 		var tx = 6
@@ -367,6 +376,7 @@ func _draw_board_bg() -> void:
 
 func _draw_lines() -> void:
 	# Draw softer dotted-style lines for cute theme
+	var dot_spacing = 42.0 if _is_mobile else 28.0  # fewer dots on mobile
 	for conn in CONNECTIONS:
 		var a = conn[0] as int
 		var b = conn[1] as int
@@ -375,9 +385,9 @@ func _draw_lines() -> void:
 			var pb = NODE_POSITIONS[b]
 			# Soft main line
 			draw_line(pa, pb, Color(GBC_LINE, 0.5), LINE_WIDTH)
-			# Dotted overlay: small circles along path
+			# Dotted overlay
 			var dist = pa.distance_to(pb)
-			var dot_count = int(dist / 14.0)
+			var dot_count = int(dist / dot_spacing)
 			for i in range(1, dot_count):
 				var t = float(i) / float(dot_count)
 				var dp = pa.lerp(pb, t)
@@ -385,6 +395,8 @@ func _draw_lines() -> void:
 
 func _draw_nodes() -> void:
 	var hl_color := Color("58B068")  # Soft emerald green for highlights
+
+	var arc_seg = 10 if _is_mobile else 16  # fewer arc segments on mobile
 
 	# First pass: draw highlight glow BEHIND nodes
 	for hl_id in highlight_nodes:
@@ -398,7 +410,7 @@ func _draw_nodes() -> void:
 		# Filled glow circle behind node
 		draw_circle(hl_pos, hl_r + 8, Color(hl_color, hl_pulse * 0.4))
 		# Outer glow ring
-		draw_arc(hl_pos, hl_r + 12, 0, TAU, 32, Color(hl_color, hl_pulse * 0.6), 3.0)
+		draw_arc(hl_pos, hl_r + 12, 0, TAU, arc_seg, Color(hl_color, hl_pulse * 0.6), 3.0)
 
 	# Second pass: draw all nodes
 	for node_id in NODE_POSITIONS:
@@ -420,18 +432,22 @@ func _draw_nodes() -> void:
 		if is_highlight:
 			var hp: float = 0.7 + sin(Time.get_ticks_msec() * 0.006) * 0.3
 			# Thick bright ring around node
-			draw_arc(pos, nr + 3, 0, TAU, 32, Color(hl_color, hp), 3.5)
-			# Inner accent ring
-			draw_arc(pos, nr - 2, 0, TAU, 24, Color(hl_color, hp * 0.5), 1.5)
+			draw_arc(pos, nr + 3, 0, TAU, arc_seg, Color(hl_color, hp), 3.5)
+			# Inner accent ring (skip on mobile for fewer draw calls)
+			if not _is_mobile:
+				draw_arc(pos, nr - 2, 0, TAU, arc_seg, Color(hl_color, hp * 0.5), 1.5)
 
 		# Start/finish node — cute flower ring
 		if node_id == 0:
 			var sr: float = BIG_RADIUS
-			draw_arc(pos, sr + 5, 0, TAU, 32, Color(GBC_MID, 0.5), 1.5)
-			draw_arc(pos, sr + 8, 0, TAU, 32, Color(GBC_LINE, 0.4), 1.5)
+			draw_arc(pos, sr + 5, 0, TAU, arc_seg, Color(GBC_MID, 0.5), 1.5)
+			if not _is_mobile:
+				draw_arc(pos, sr + 8, 0, TAU, arc_seg, Color(GBC_LINE, 0.4), 1.5)
 			if TEX_DECO_FLOWER:
 				var flower_sz = TEX_DECO_FLOWER.get_size()
-				for angle_deg in [45, 135, 225, 315]:
+				# 2 flowers on mobile, 4 on desktop
+				var flower_angles = [45, 225] if _is_mobile else [45, 135, 225, 315]
+				for angle_deg in flower_angles:
 					var fangle = deg_to_rad(angle_deg)
 					var fp = pos + Vector2(cos(fangle), sin(fangle)) * (sr + 12) - flower_sz * 0.5
 					draw_texture(TEX_DECO_FLOWER, fp, Color(1, 1, 1, 0.5))
@@ -538,8 +554,10 @@ func _draw_snap_indicator() -> void:
 	if not snap_active:
 		return
 	var pulse = 0.5 + sin(Time.get_ticks_msec() * 0.008) * 0.3
-	draw_arc(snap_target_pos, 24, 0, TAU, 32, Color(GBC_BRIGHT, pulse), 3.0)
-	draw_arc(snap_target_pos, 16, 0, TAU, 24, Color(GBC_MID, pulse * 0.5), 2.0)
+	var snap_seg = 8 if _is_mobile else 16
+	draw_arc(snap_target_pos, 24, 0, TAU, snap_seg, Color(GBC_BRIGHT, pulse), 3.0)
+	if not _is_mobile:
+		draw_arc(snap_target_pos, 16, 0, TAU, snap_seg, Color(GBC_MID, pulse * 0.5), 2.0)
 	var ch = 7.0
 	draw_line(snap_target_pos + Vector2(-ch, 0), snap_target_pos + Vector2(ch, 0),
 		Color(GBC_BRIGHT, pulse), 2.0)
@@ -550,86 +568,89 @@ func _draw_snap_indicator() -> void:
 
 func _draw_cute_decorations() -> void:
 	# Scatter paw prints, flowers, grass, and stars around the board
-	# These are placed in the spaces between the board lines and edges
+	# On mobile/web: draw only half the decorations to save GPU draw calls
 
 	# ── Paw prints along edges (subtle, rotated) ──
 	if TEX_DECO_PAW:
 		var paw_positions = [
-			# Top edge
 			Vector2(175, 60), Vector2(345, 60),
-			# Bottom edge
 			Vector2(175, 545), Vector2(345, 545),
-			# Left edge
-			Vector2(22, 215), Vector2(22, 395),
-			# Right edge
-			Vector2(495, 215), Vector2(495, 395),
 		]
+		if not _is_mobile:
+			paw_positions.append_array([
+				Vector2(22, 215), Vector2(22, 395),
+				Vector2(495, 215), Vector2(495, 395),
+			])
+		var paw_sz = TEX_DECO_PAW.get_size()
 		for pp in paw_positions:
-			var paw_sz = TEX_DECO_PAW.get_size()
 			draw_texture(TEX_DECO_PAW, pp - paw_sz * 0.5, Color(1, 1, 1, 0.25))
 
 	# ── Flowers in the four inner quadrants ──
 	if TEX_DECO_FLOWER:
-		var flower_positions = [
-			# Top-left quadrant
-			Vector2(110, 155), Vector2(155, 195),
-			# Top-right quadrant
-			Vector2(400, 155), Vector2(365, 195),
-			# Bottom-left quadrant
-			Vector2(110, 445), Vector2(155, 405),
-			# Bottom-right quadrant
-			Vector2(400, 445), Vector2(365, 405),
-			# Center area accents
-			Vector2(200, 265), Vector2(320, 340),
-		]
+		var flower_positions: Array
+		if _is_mobile:
+			# 4 flowers on mobile (corners only)
+			flower_positions = [
+				Vector2(110, 155), Vector2(400, 155),
+				Vector2(110, 445), Vector2(400, 445),
+			]
+		else:
+			flower_positions = [
+				Vector2(110, 155), Vector2(155, 195),
+				Vector2(400, 155), Vector2(365, 195),
+				Vector2(110, 445), Vector2(155, 405),
+				Vector2(400, 445), Vector2(365, 405),
+				Vector2(200, 265), Vector2(320, 340),
+			]
 		var flower_sz = TEX_DECO_FLOWER.get_size()
 		for fp in flower_positions:
 			draw_texture(TEX_DECO_FLOWER, fp - flower_sz * 0.5, Color(1, 1, 1, 0.35))
 
 	# ── Grass tufts near outer nodes ──
 	if TEX_DECO_GRASS:
-		var grass_positions = [
-			Vector2(132, 100), Vector2(303, 100), # top
-			Vector2(132, 528), Vector2(303, 528), # bottom
-			Vector2(58, 258), Vector2(58, 344),    # left
-			Vector2(486, 258), Vector2(486, 344),  # right
-		]
+		var grass_positions: Array
+		if _is_mobile:
+			grass_positions = [
+				Vector2(132, 100), Vector2(303, 528),
+				Vector2(58, 258), Vector2(486, 344),
+			]
+		else:
+			grass_positions = [
+				Vector2(132, 100), Vector2(303, 100),
+				Vector2(132, 528), Vector2(303, 528),
+				Vector2(58, 258), Vector2(58, 344),
+				Vector2(486, 258), Vector2(486, 344),
+			]
 		var grass_sz = TEX_DECO_GRASS.get_size()
 		for gp in grass_positions:
 			draw_texture(TEX_DECO_GRASS, gp - grass_sz * 0.5, Color(1, 1, 1, 0.3))
 
 	# ── Stars in diagonal path spaces ──
 	if TEX_DECO_STAR:
-		var star_positions = [
-			# Diagonal A spaces
-			Vector2(370, 140), Vector2(295, 260),
-			# Diagonal B spaces
-			Vector2(150, 140), Vector2(225, 260),
-			# Center accent
-			Vector2(260, 301),
-		]
+		var star_positions: Array
+		if _is_mobile:
+			star_positions = [Vector2(370, 140), Vector2(150, 140)]
+		else:
+			star_positions = [
+				Vector2(370, 140), Vector2(295, 260),
+				Vector2(150, 140), Vector2(225, 260),
+				Vector2(260, 301),
+			]
 		var star_sz = TEX_DECO_STAR.get_size()
 		for sp in star_positions:
 			draw_texture(TEX_DECO_STAR, sp - star_sz * 0.5, Color(1, 1, 1, 0.3))
 
-	# ── Soft border decoration (tiny circles instead of diamonds) ──
-	var deco_col = Color(GBC_NODE, 0.15)
-	# Top border
-	for i in range(10):
-		var cx = 50 + i * 44
-		draw_circle(Vector2(cx, 50), 2.5, deco_col)
-	# Bottom border
-	for i in range(10):
-		var cx = 50 + i * 44
-		draw_circle(Vector2(cx, 552), 2.5, deco_col)
-	# Left border
-	for i in range(8):
-		var cy = 110 + i * 55
-		draw_circle(Vector2(20, cy), 2.5, deco_col)
-	# Right border
-	for i in range(8):
-		var cy = 110 + i * 55
-		draw_circle(Vector2(500, cy), 2.5, deco_col)
+	# ── Soft border decoration — skip on mobile ──
+	if not _is_mobile:
+		var deco_col = Color(GBC_NODE, 0.15)
+		for i in range(5):
+			var cx = 50 + i * 88
+			draw_circle(Vector2(cx, 50), 2.5, deco_col)
+			draw_circle(Vector2(cx, 552), 2.5, deco_col)
+		for i in range(4):
+			var cy = 110 + i * 110
+			draw_circle(Vector2(20, cy), 2.5, deco_col)
+			draw_circle(Vector2(500, cy), 2.5, deco_col)
 
 # ─── Public helpers ───
 
