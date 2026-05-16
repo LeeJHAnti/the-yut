@@ -110,6 +110,12 @@ func _ready() -> void:
 	popup_style.shadow_color = Color(0, 0, 0, 0.15)
 	popup_style.shadow_size = 3
 	action_popup.add_theme_stylebox_override("panel", popup_style)
+	# Boost action label readability — larger, darker text with shadow
+	action_label.add_theme_font_size_override("font_size", 15)
+	action_label.add_theme_color_override("font_color", Color("503820"))
+	action_label.add_theme_color_override("font_shadow_color", Color("D4B888", 0.6))
+	action_label.add_theme_constant_override("shadow_offset_x", 1)
+	action_label.add_theme_constant_override("shadow_offset_y", 1)
 
 	# ─── Create finish confirmation panel (Nintendo RPG dialog style) ───
 	var finish_panel_container = PanelContainer.new()
@@ -561,6 +567,9 @@ func _update_drag(local_pos: Vector2) -> void:
 
 func _end_drag() -> void:
 	if dragging_piece_id < 0:
+		return
+	if not piece_nodes.has(dragging_piece_id):
+		dragging_piece_id = -1
 		return
 
 	var piece_node = piece_nodes[dragging_piece_id]

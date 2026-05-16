@@ -29,13 +29,17 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            // Enable gzip/brotli compression for all responses
+            // .wasm and .pck compress ~60-70%, dramatically reducing download time
+            .wrap(middleware::Compress::default())
             .wrap(middleware::Logger::default())
             .wrap(
                 middleware::DefaultHeaders::new()
-                    // Disable browser caching so exports are always fresh
-                    .add((header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"))
-                    .add((header::PRAGMA, "no-cache"))
-                    .add((header::EXPIRES, "0"))
+                    // Cache static assets for 1 hour; browser will use If-Modified-Since
+                    // for revalidation after that. index.html is small and re-fetched each time
+                    // by the browser's navigation request; heavy assets (.wasm, .pck) benefit
+                    // from caching on repeat visits.
+                    .add((header::CACHE_CONTROL, "public, max-age=3600"))
                     // NOTE: COOP/COEP removed — threads are disabled (GODOT_THREADS_ENABLED=false)
                     // and require-corp blocks cross-origin AdSense scripts.
             )

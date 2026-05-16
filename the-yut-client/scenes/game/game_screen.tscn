@@ -29,9 +29,12 @@ offset_left = 0.0
 offset_top = 0.0
 offset_right = 520.0
 offset_bottom = 34.0
-theme_override_colors/font_color = Color(0.314, 0.22, 0.125, 1)
-theme_override_font_sizes/font_size = 16
-text = ">> YOUR TURN <<"
+theme_override_colors/font_color = Color(1, 0.97, 0.94, 1)
+theme_override_colors/font_shadow_color = Color(0.31, 0.22, 0.12, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+text = "YOUR TURN"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -105,7 +108,7 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_override_colors/font_color = Color(0.314, 0.22, 0.125, 1)
 theme_override_font_sizes/font_size = 14
-text = ">> Choose Path <<"
+text = "Choose Path"
 horizontal_alignment = 1
 
 [node name="Buttons" type="HBoxContainer" parent="PathChoicePanel/VBox"]

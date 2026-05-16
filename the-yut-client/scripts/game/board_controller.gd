@@ -38,6 +38,9 @@ const TEX_FRAME_MARQUEE = preload("res://assets/sprites/frame_marquee.png")
 const TEX_FRAME_TRAY = preload("res://assets/sprites/frame_tray.png")
 const TEX_FRAME_THROW = preload("res://assets/sprites/frame_throw.png")
 
+# ═══ Turn indicator ═══
+const TEX_TURN_PAW = preload("res://assets/sprites/turn_paw.png")
+
 # ═══ Cute animal-theme decoration sprites ═══
 const TEX_DECO_PAW = preload("res://assets/sprites/deco_paw.png")
 const TEX_DECO_FLOWER = preload("res://assets/sprites/deco_flower.png")
@@ -474,8 +477,8 @@ func _draw_player_trays() -> void:
 		draw_rect(Rect2(0, ty, 520, th), GBC_LINE, false, 2.0)
 		draw_rect(Rect2(3, ty + 3, 514, th - 6), Color(GBC_LINE, 0.25), false, 1.0)
 
-	# Section label
-	draw_string(font, Vector2(10, ty + 12), "PLAYERS", HORIZONTAL_ALIGNMENT_LEFT, 80, 9, Color(GBC_LINE, 0.5))
+	# Section label — slightly larger and more visible
+	draw_string(font, Vector2(10, ty + 13), "PLAYERS", HORIZONTAL_ALIGNMENT_LEFT, 90, 10, Color(GBC_LINE, 0.7))
 
 	for i in range(mini(player_tray_names.size(), count)):
 		var row_y = TRAY_Y_START + i * row_h
@@ -490,20 +493,13 @@ func _draw_player_trays() -> void:
 			var pulse = 0.4 + sin(Time.get_ticks_msec() * 0.004) * 0.15
 			# Glowing background bar
 			draw_rect(Rect2(4, row_y + 1, 512, row_h - 2), Color(GBC_BRIGHT, pulse))
-			# Pixel-art turn arrow: 3 stacked chevrons
-			var ax = 14.0
-			var ay = row_y + row_h * 0.5
-			var arrow_col = Color("F8D878")  # warm gold
-			var arrow_col2 = Color("D0A030") # darker gold outline
-			# Outer chevron (outline)
-			draw_line(Vector2(ax - 1, ay - 6), Vector2(ax + 5, ay), arrow_col2, 2.0)
-			draw_line(Vector2(ax + 5, ay), Vector2(ax - 1, ay + 6), arrow_col2, 2.0)
-			# Inner chevron (bright)
-			draw_line(Vector2(ax, ay - 5), Vector2(ax + 4, ay), arrow_col, 2.0)
-			draw_line(Vector2(ax + 4, ay), Vector2(ax, ay + 5), arrow_col, 2.0)
-			# Second chevron
-			draw_line(Vector2(ax + 5, ay - 5), Vector2(ax + 9, ay), arrow_col, 2.0)
-			draw_line(Vector2(ax + 9, ay), Vector2(ax + 5, ay + 5), arrow_col, 2.0)
+			# Cute paw turn indicator with gentle bounce
+			if TEX_TURN_PAW:
+				var paw_size = TEX_TURN_PAW.get_size()
+				var bounce = sin(Time.get_ticks_msec() * 0.006) * 2.0
+				var paw_x = 8.0
+				var paw_y = row_y + row_h * 0.5 - paw_size.y * 0.5 + bounce
+				draw_texture(TEX_TURN_PAW, Vector2(paw_x, paw_y))
 
 		# Team badge (if in team mode)
 		var name_x = 26.0
@@ -520,13 +516,23 @@ func _draw_player_trays() -> void:
 				HORIZONTAL_ALIGNMENT_LEFT, 14, 10, GBC_BRIGHT)
 			name_x = 42.0
 
-		# Player name (left side)
+		# Player name (left side) — larger font + dark shadow for readability
 		var name_str = player_tray_names[i]
 		if name_str.length() > 8:
 			name_str = name_str.left(7) + ".."
-		var name_color = GBC_BRIGHT if is_current else GBC_MID
-		draw_string(font, Vector2(name_x, row_y + row_h * 0.5 + 4), name_str,
-			HORIZONTAL_ALIGNMENT_LEFT, 120, 13, name_color)
+		var name_font_size = 15
+		var name_y = row_y + row_h * 0.5 + 5
+		var name_pos = Vector2(name_x, name_y)
+		# Dark outline/shadow for contrast (draw behind main text)
+		var shadow_color = Color(GBC_DARK, 0.9)
+		draw_string(font, name_pos + Vector2(1, 1), name_str,
+			HORIZONTAL_ALIGNMENT_LEFT, 140, name_font_size, shadow_color)
+		draw_string(font, name_pos + Vector2(-1, 0), name_str,
+			HORIZONTAL_ALIGNMENT_LEFT, 140, name_font_size, shadow_color)
+		# Main text — bright white when current, warm cream otherwise
+		var name_color = Color("FFFFFF") if is_current else Color("F0E4D0")
+		draw_string(font, name_pos, name_str,
+			HORIZONTAL_ALIGNMENT_LEFT, 140, name_font_size, name_color)
 
 		# Piece slot indicators (right side)
 		for slot in range(4):
@@ -546,9 +552,12 @@ func _draw_throw_area() -> void:
 		draw_rect(Rect2(0, area_y, 520, area_h), GBC_LINE, false, 2.0)
 		draw_rect(Rect2(3, area_y + 3, 514, area_h - 6), Color(GBC_LINE, 0.2), false, 1.0)
 
-	# Section label
+	# Section label — larger and bolder for visibility
 	var font = ThemeDB.fallback_font
-	draw_string(font, Vector2(10, area_y + 12), "THROW", HORIZONTAL_ALIGNMENT_LEFT, 80, 9, Color(GBC_LINE, 0.4))
+	# Shadow
+	draw_string(font, Vector2(11, area_y + 14), "THROW", HORIZONTAL_ALIGNMENT_LEFT, 90, 11, Color(GBC_DARK, 0.3))
+	# Main
+	draw_string(font, Vector2(10, area_y + 13), "THROW", HORIZONTAL_ALIGNMENT_LEFT, 90, 11, Color(GBC_LINE, 0.75))
 
 func _draw_snap_indicator() -> void:
 	if not snap_active:

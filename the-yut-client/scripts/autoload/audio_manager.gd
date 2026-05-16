@@ -31,17 +31,17 @@ const SFX_MAP: Dictionary = {
 # ═══ BGM Paths (lazy-loaded on demand) ═══
 # Title: 1 fixed track  |  In-game: 5 random tracks  |  Game Over: 1 fixed track
 # Style: 90s Japanese arcade fusion jazz × Korean traditional (gugak) arrangement
-# NOTE: NOT preloaded — these 7 MP3s total ~37MB. Loading on demand cuts startup time.
+# NOTE: NOT preloaded — lazy-loaded on demand. OGG Vorbis 96kbps (~20MB total vs 37MB MP3).
 const BGM_PATHS: Dictionary = {
-	"title":    ["res://assets/audio/bgm/bgm_title.mp3"],
+	"title":    ["res://assets/audio/bgm/bgm_title.ogg"],
 	"ingame":   [
-		"res://assets/audio/bgm/bgm_ingame_1.mp3",
-		"res://assets/audio/bgm/bgm_ingame_2.mp3",
-		"res://assets/audio/bgm/bgm_ingame_3.mp3",
-		"res://assets/audio/bgm/bgm_ingame_4.mp3",
-		"res://assets/audio/bgm/bgm_ingame_5.mp3",
+		"res://assets/audio/bgm/bgm_ingame_1.ogg",
+		"res://assets/audio/bgm/bgm_ingame_2.ogg",
+		"res://assets/audio/bgm/bgm_ingame_3.ogg",
+		"res://assets/audio/bgm/bgm_ingame_4.ogg",
+		"res://assets/audio/bgm/bgm_ingame_5.ogg",
 	],
-	"gameover": ["res://assets/audio/bgm/bgm_gameover.mp3"],
+	"gameover": ["res://assets/audio/bgm/bgm_gameover.ogg"],
 }
 var _bgm_cache: Dictionary = {}  # path → AudioStream (loaded streams stay cached)
 
@@ -339,7 +339,7 @@ func play_bgm(track_name: String = "ingame") -> void:
 		var paths = BGM_PATHS[track_name]
 		# Pick a random track path from the array
 		var path = paths[randi() % paths.size()]
-		# Lazy-load: only load the MP3 when first needed, then cache it
+		# Lazy-load: only load the audio when first needed, then cache it
 		var stream: AudioStream
 		if _bgm_cache.has(path):
 			stream = _bgm_cache[path]
@@ -348,7 +348,9 @@ func play_bgm(track_name: String = "ingame") -> void:
 			_bgm_cache[path] = stream
 		bgm_player.stream = stream
 		# Enable infinite looping
-		if bgm_player.stream is AudioStreamMP3:
+		if bgm_player.stream is AudioStreamOggVorbis:
+			bgm_player.stream.loop = true
+		elif bgm_player.stream is AudioStreamMP3:
 			bgm_player.stream.loop = true
 		elif bgm_player.stream is AudioStreamWAV:
 			bgm_player.stream.loop_mode = AudioStreamWAV.LOOP_FORWARD

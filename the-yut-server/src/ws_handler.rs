@@ -564,7 +564,7 @@ async fn handle_order_throw(client: &mut WsClient, rooms: &RoomMap) {
                             let rooms_clone = rooms.clone();
                             let code_clone = room_code.clone();
                             drop(room);
-                            schedule_bot_turn(rooms_clone, code_clone, BOT_ACTION_DELAY_MS);
+                            schedule_bot_turn(rooms_clone, code_clone, BOT_TURN_START_DELAY_MS);
                         }
                     } else {
                         // Check if there was a tie (throwers were reset)
@@ -855,7 +855,7 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                     let turn_msg = ServerMessage::your_turn(current_player.to_string(), true);
                     room.broadcast(&turn_msg);
 
-                    (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
+                    (check_needs_bot_turn(room), BOT_TURN_START_DELAY_MS)
                 } else {
                     // Check for tie
                     let throwers_reset = room.state.order_current_idx == 0
@@ -959,10 +959,13 @@ fn process_single_bot_action(room: &mut crate::room::Room) -> (bool, u64) {
                 // No movable pieces, advance turn
                 room.state.turn.advance_turn();
                 room.state.phase = GamePhase::Throwing;
+                // Sync state so clients see the phase/turn change
+                let sync = ServerMessage::game_state_sync(room.state.to_sync_json());
+                room.broadcast(&sync);
                 let next = room.state.turn.current_player;
                 let turn_msg = ServerMessage::your_turn(next.to_string(), true);
                 room.broadcast(&turn_msg);
-                (check_needs_bot_turn(room), BOT_ACTION_DELAY_MS)
+                (check_needs_bot_turn(room), BOT_TURN_START_DELAY_MS)
             }
         }
         GamePhase::SelectingPath => {

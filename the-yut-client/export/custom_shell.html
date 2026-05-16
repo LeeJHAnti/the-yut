@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>The Yut - 윷놀이</title>
+		<meta name="description" content="Play Yutnori online! A traditional Korean board game with cute pixel art.">
+		<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6672065155865292" crossorigin="anonymous"></script>
+		<style>
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	width: 100%;
+	height: 100%;
+}
+
+body {
+	color: #503820;
+	background-color: #1a1a1a;
+	overflow: hidden;
+	touch-action: none;
+	font-family: 'Courier New', monospace;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+/* Allow touch interaction on ad units */
+#ad-top, #ad-bottom {
+	touch-action: auto;
+}
+
+/* ── Ad layout ── */
+#ad-top {
+	width: 100%;
+	max-width: 728px;
+	text-align: center;
+	flex-shrink: 0;
+	overflow: hidden;
+	z-index: 10;
+}
+#ad-top:empty,
+#ad-top .adsbygoogle[data-ad-status="unfilled"] {
+	display: none !important;
+}
+
+#ad-bottom {
+	display: none;
+	width: 100%;
+	max-width: 728px;
+	text-align: center;
+	flex-shrink: 0;
+	overflow: hidden;
+	z-index: 10;
+}
+#ad-bottom:empty,
+#ad-bottom .adsbygoogle[data-ad-status="unfilled"] {
+	display: none !important;
+}
+
+#game-container {
+	flex: 1 1 0;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	position: relative;
+	overflow: hidden;
+	min-height: 0;
+}
+
+/* ── Mobile: hide top ad, show bottom if tall enough ── */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+	#ad-top { display: none !important; }
+	#ad-bottom.mobile-active { display: block; max-height: 60px; }
+}
+/* ── Very short screens: hide ALL ads ── */
+@media (max-height: 600px) {
+	#ad-top, #ad-bottom { display: none !important; }
+}
+/* ── Desktop: constrain top ad ── */
+@media (min-width: 769px) and (hover: hover) {
+	#ad-top { max-height: 100px; }
+	#ad-bottom { display: none !important; }
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+/* ─── Custom Loading Screen ─── */
+#status {
+	position: absolute;
+	left: 0; right: 0; top: 0; bottom: 0;
+	background-color: #E8D4B8;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	visibility: hidden;
+	z-index: 10;
+}
+
+.loading-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 24px;
+	padding: 32px;
+}
+
+/* Title area */
+.loading-title {
+	font-size: 36px;
+	font-weight: bold;
+	color: #6B4C30;
+	letter-spacing: 3px;
+	text-shadow: 2px 2px 0px #D4B888;
+}
+
+.loading-subtitle {
+	font-size: 14px;
+	color: #B89868;
+	margin-top: -12px;
+	letter-spacing: 1px;
+}
+
+/* Board decoration (simple pixel art yut board) */
+.loading-board {
+	width: 120px;
+	height: 120px;
+	position: relative;
+	margin: 8px 0;
+}
+
+.board-dot {
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: #D4B888;
+	border: 2px solid #8C6C44;
+}
+
+.board-dot.corner {
+	width: 16px;
+	height: 16px;
+	background: #F8F0E0;
+	border: 2px solid #6B4C30;
+}
+
+.board-dot.center {
+	width: 18px;
+	height: 18px;
+	background: #F8F0E0;
+	border: 2px solid #6B4C30;
+}
+
+/* Animated yut sticks */
+.yut-sticks {
+	display: flex;
+	gap: 6px;
+	margin: 8px 0;
+}
+
+.yut-stick {
+	width: 10px;
+	height: 44px;
+	border-radius: 5px;
+	background: #D4B888;
+	border: 1.5px solid #8C6C44;
+	animation: yut-flip 1.5s ease-in-out infinite;
+}
+
+.yut-stick:nth-child(1) { animation-delay: 0s; }
+.yut-stick:nth-child(2) { animation-delay: 0.15s; }
+.yut-stick:nth-child(3) { animation-delay: 0.3s; }
+.yut-stick:nth-child(4) { animation-delay: 0.45s; }
+
+@keyframes yut-flip {
+	0%, 100% {
+		background: #D4B888;
+		transform: rotateY(0deg) scaleX(1);
+	}
+	50% {
+		background: #6B4C30;
+		transform: rotateY(180deg) scaleX(0.7);
+	}
+}
+
+/* Progress bar */
+.loading-progress-container {
+	width: 200px;
+	height: 16px;
+	background: #F0E4D0;
+	border: 2px solid #6B4C30;
+	border-radius: 3px;
+	overflow: hidden;
+	position: relative;
+}
+
+.loading-progress-bar {
+	height: 100%;
+	background: linear-gradient(90deg, #B89868, #D4B888);
+	border-radius: 1px;
+	width: 0%;
+	transition: width 0.3s ease;
+}
+
+.loading-progress-text {
+	position: absolute;
+	top: 0; left: 0; right: 0; bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	color: #6B4C30;
+	font-weight: bold;
+}
+
+/* Loading message */
+.loading-message {
+	font-size: 12px;
+	color: #907040;
+	animation: blink-msg 1.2s ease-in-out infinite;
+}
+
+@keyframes blink-msg {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.4; }
+}
+
+/* Walking animal animation */
+.loading-animal {
+	width: 32px;
+	height: 32px;
+	background: #D05848;
+	border-radius: 50%;
+	position: relative;
+	animation: animal-bounce 0.6s ease-in-out infinite;
+}
+
+.loading-animal::after {
+	content: '';
+	position: absolute;
+	bottom: -4px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 20px;
+	height: 4px;
+	background: rgba(107, 76, 48, 0.2);
+	border-radius: 50%;
+	animation: shadow-pulse 0.6s ease-in-out infinite;
+}
+
+@keyframes animal-bounce {
+	0%, 100% { transform: translateY(0); }
+	50% { transform: translateY(-8px); }
+}
+
+@keyframes shadow-pulse {
+	0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.3; }
+	50% { transform: translateX(-50%) scaleX(0.6); opacity: 0.15; }
+}
+
+/* Decorative paw prints */
+.paw-trail {
+	position: absolute;
+	bottom: 60px;
+	left: 0;
+	right: 0;
+	display: flex;
+	justify-content: center;
+	gap: 28px;
+	opacity: 0.2;
+}
+
+.paw {
+	width: 14px;
+	height: 14px;
+	border-radius: 50% 50% 40% 40%;
+	background: #8C6C44;
+	animation: paw-appear 2s ease-in-out infinite;
+}
+
+.paw:nth-child(1) { animation-delay: 0s; }
+.paw:nth-child(2) { animation-delay: 0.3s; }
+.paw:nth-child(3) { animation-delay: 0.6s; }
+.paw:nth-child(4) { animation-delay: 0.9s; }
+.paw:nth-child(5) { animation-delay: 1.2s; }
+
+@keyframes paw-appear {
+	0%, 20% { opacity: 0; transform: scale(0.5); }
+	40%, 60% { opacity: 1; transform: scale(1); }
+	80%, 100% { opacity: 0; transform: scale(0.8); }
+}
+
+/* Corner decorations */
+.corner-deco {
+	position: absolute;
+	width: 40px;
+	height: 40px;
+	opacity: 0.15;
+}
+
+.corner-deco.tl { top: 20px; left: 20px; }
+.corner-deco.tr { top: 20px; right: 20px; transform: scaleX(-1); }
+.corner-deco.bl { bottom: 20px; left: 20px; transform: scaleY(-1); }
+.corner-deco.br { bottom: 20px; right: 20px; transform: scale(-1); }
+
+.corner-deco svg {
+	width: 100%;
+	height: 100%;
+}
+
+/* Error notice */
+#status-notice {
+	display: none;
+	background-color: #F0E4D0;
+	border-radius: 8px;
+	border: 2px solid #D05848;
+	color: #6B4C30;
+	font-family: 'Courier New', monospace;
+	line-height: 1.4;
+	margin: 0 2rem;
+	overflow: hidden;
+	padding: 1rem 1.5rem;
+	text-align: center;
+	z-index: 1;
+	max-width: 320px;
+	font-size: 13px;
+}
+		</style>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="$GODOT_URL" />
+$GODOT_HEAD_INCLUDE
+	</head>
+	<body>
+		<!-- Top Ad (desktop only) -->
+		<div id="ad-top">
+			<ins class="adsbygoogle"
+				style="display:block"
+				data-ad-client="ca-pub-6672065155865292"
+				data-ad-slot="3007482495"
+				data-ad-format="horizontal"
+				data-full-width-responsive="true"></ins>
+			<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+		</div>
+
+		<div id="game-container">
+		<canvas id="canvas">
+			Your browser does not support the canvas tag.
+		</canvas>
+
+		<noscript>
+			Your browser does not support JavaScript.
+		</noscript>
+
+		<div id="status">
+			<!-- Corner decorations -->
+			<div class="corner-deco tl"><svg viewBox="0 0 40 40"><path d="M5 35 Q5 5 35 5" stroke="#8C6C44" fill="none" stroke-width="3"/><circle cx="8" cy="8" r="3" fill="#D4B888"/></svg></div>
+			<div class="corner-deco tr"><svg viewBox="0 0 40 40"><path d="M5 35 Q5 5 35 5" stroke="#8C6C44" fill="none" stroke-width="3"/><circle cx="8" cy="8" r="3" fill="#D4B888"/></svg></div>
+			<div class="corner-deco bl"><svg viewBox="0 0 40 40"><path d="M5 35 Q5 5 35 5" stroke="#8C6C44" fill="none" stroke-width="3"/><circle cx="8" cy="8" r="3" fill="#D4B888"/></svg></div>
+			<div class="corner-deco br"><svg viewBox="0 0 40 40"><path d="M5 35 Q5 5 35 5" stroke="#8C6C44" fill="none" stroke-width="3"/><circle cx="8" cy="8" r="3" fill="#D4B888"/></svg></div>
+
+			<div class="loading-container">
+				<!-- Title -->
+				<div class="loading-title">THE YUT</div>
+				<div class="loading-subtitle">Traditional Korean Board Game</div>
+
+				<!-- Animated yut sticks -->
+				<div class="yut-sticks">
+					<div class="yut-stick"></div>
+					<div class="yut-stick"></div>
+					<div class="yut-stick"></div>
+					<div class="yut-stick"></div>
+				</div>
+
+				<!-- Bouncing animal piece -->
+				<div class="loading-animal"></div>
+
+				<!-- Progress bar -->
+				<div class="loading-progress-container">
+					<div class="loading-progress-bar" id="loading-bar"></div>
+					<div class="loading-progress-text" id="loading-percent">0%</div>
+				</div>
+
+				<!-- Loading message -->
+				<div class="loading-message" id="loading-msg">Loading game assets...</div>
+			</div>
+
+			<!-- Paw trail at bottom -->
+			<div class="paw-trail">
+				<div class="paw"></div>
+				<div class="paw"></div>
+				<div class="paw"></div>
+				<div class="paw"></div>
+				<div class="paw"></div>
+			</div>
+
+			<div id="status-notice"></div>
+		</div>
+
+		</div><!-- /game-container -->
+
+		<!-- Bottom Ad (mobile only) — uses auto format for mobile banner -->
+		<div id="ad-bottom">
+			<ins class="adsbygoogle"
+				style="display:block"
+				data-ad-client="ca-pub-6672065155865292"
+				data-ad-slot="3007482495"
+				data-ad-format="auto"
+				data-full-width-responsive="true"></ins>
+			<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+		</div>
+		<script>
+		(function() {
+			var isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+				|| (navigator.maxTouchPoints > 0 && window.innerWidth <= 768);
+			var adBottom = document.getElementById('ad-bottom');
+			if (isMobile && adBottom && window.innerHeight > 600) {
+				adBottom.classList.add('mobile-active');
+			}
+		})();
+		</script>
+
+		<script src="$GODOT_URL"></script>
+		<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const statusOverlay = document.getElementById('status');
+	const statusNotice = document.getElementById('status-notice');
+	const loadingBar = document.getElementById('loading-bar');
+	const loadingPercent = document.getElementById('loading-percent');
+	const loadingMsg = document.getElementById('loading-msg');
+
+	let initializing = true;
+	let statusMode = '';
+
+	const messages = [
+		'Carving yut sticks...',
+		'Gathering animal friends...',
+		'Drawing the board...',
+		'Tuning instruments...',
+		'Almost ready!',
+	];
+	let msgIndex = 0;
+	const msgInterval = setInterval(() => {
+		msgIndex = (msgIndex + 1) % messages.length;
+		if (loadingMsg) loadingMsg.textContent = messages[msgIndex];
+	}, 2500);
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			clearInterval(msgInterval);
+			statusOverlay.style.transition = 'opacity 0.5s ease';
+			// Set opacity after transition so the animation triggers properly
+			requestAnimationFrame(() => {
+				statusOverlay.style.opacity = '0';
+			});
+			setTimeout(() => {
+				statusOverlay.remove();
+				initializing = false;
+			}, 600);
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		clearInterval(msgInterval);
+		if (err instanceof Error) {
+			setStatusNotice(err.message);
+		} else if (typeof err === 'string') {
+			setStatusNotice(err);
+		} else {
+			setStatusNotice('An unknown error occurred.');
+		}
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				new Promise((resolve) => {
+					setTimeout(() => resolve(), 2000);
+				}),
+			]).then(() => {
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+			displayFailureNotice(missingMsg + missing.join('\n'));
+		}
+	} else {
+		setStatusMode('progress');
+		// Timeout: if loading takes longer than 60s, show a notice
+		const loadTimeout = setTimeout(() => {
+			displayFailureNotice('Loading is taking longer than expected.\nPlease check your connection and try refreshing.');
+		}, 60000);
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (current > 0 && total > 0) {
+					const pct = Math.round((current / total) * 100);
+					loadingBar.style.width = pct + '%';
+					loadingPercent.textContent = pct + '%';
+				}
+			},
+		}).then(() => {
+			clearTimeout(loadTimeout);
+			setStatusMode('hidden');
+		}, (err) => {
+			clearTimeout(loadTimeout);
+			displayFailureNotice(err);
+		});
+	}
+}());
+		</script>
+	</body>
+</html>

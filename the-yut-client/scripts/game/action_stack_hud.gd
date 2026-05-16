@@ -58,13 +58,16 @@ func _draw() -> void:
 	var badge_spacing: float = 4.0
 	var badge_padding_x: float = 8.0
 	var font_size: int = 11
-	var corner_radius: float = 4.0
 
-	# Calculate total width to center everything
+	# Calculate total width to center everything (use actual font metrics)
+	var font = ThemeDB.fallback_font
+	if font == null:
+		return
 	var badge_widths: Array = []
 	for r in results:
 		var label_text = RESULT_LABELS.get(r, r)
-		var w = label_text.length() * 7.0 + badge_padding_x * 2
+		var text_w = font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var w = text_w + badge_padding_x * 2
 		badge_widths.append(w)
 
 	var total_width: float = 0.0
@@ -72,11 +75,21 @@ func _draw() -> void:
 		total_width += w
 	total_width += badge_spacing * (results.size() - 1)
 
-	# Header label width
+	# Header label width (use font metrics)
 	var header_text = "x" + str(results.size())
-	var header_w = header_text.length() * 8.0 + 12.0
+	var header_w = font.get_string_size(header_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 12.0
 
 	var full_width = header_w + 6.0 + total_width + 12.0
+
+	# Clamp full_width to control bounds so badges don't overflow
+	var max_width = size.x - 16.0
+	if full_width > max_width:
+		var scale_factor = max_width / full_width
+		for i in range(badge_widths.size()):
+			badge_widths[i] *= scale_factor
+		total_width *= scale_factor
+		header_w *= scale_factor
+		full_width = max_width
 
 	# Position: centered horizontally, slight y offset with slide animation
 	var cx = size.x * 0.5
